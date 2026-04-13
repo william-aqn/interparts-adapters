@@ -1,0 +1,23 @@
+{
+  "siteName": "Phase 5 UI Test",
+  "tags": [
+    "test",
+    "phase5"
+  ],
+  "credentialsRef": null,
+  "maxRPS": 3,
+  "retries": 1,
+  "healthCheckQuery": "phone",
+  "mode": "http",
+  "timeout": 10000,
+  "version": 1,
+  "prompt": {},
+  "siteId": "phase5-ui-test",
+  "url": "https://dummyjson.com",
+  "needsAuth": false,
+  "proxy": {
+    "enabled": false
+  },
+  "lastModified": "2026-04-13T11:15:56.176Z",
+  "lastModifiedBy": "ai-pipeline"
+}
