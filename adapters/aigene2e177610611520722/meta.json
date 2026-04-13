@@ -13,10 +13,10 @@
   },
   "prompt": {},
   "timeout": 10000,
-  "version": 1,
+  "version": 2,
   "siteId": "aigene2e177610611520722",
   "siteName": "AI Gen Test",
   "credentialsRef": null,
-  "lastModified": "2026-04-13T18:49:28.460Z",
+  "lastModified": "2026-04-13T18:49:38.157Z",
   "lastModifiedBy": "ai-pipeline"
 }
