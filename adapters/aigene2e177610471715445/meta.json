@@ -1,0 +1,22 @@
+{
+  "siteId": "aigene2e177610471715445",
+  "siteName": "AI Gen Test",
+  "credentialsRef": null,
+  "tags": [
+    "e2e"
+  ],
+  "healthCheckQuery": "phone",
+  "mode": "http",
+  "proxy": {
+    "enabled": false
+  },
+  "prompt": {},
+  "url": "https://dummyjson.com",
+  "maxRPS": 3,
+  "timeout": 10000,
+  "version": 1,
+  "needsAuth": false,
+  "retries": 1,
+  "lastModified": "2026-04-13T18:26:10.034Z",
+  "lastModifiedBy": "ai-pipeline"
+}
