@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "healthCheckQuery": "phone",
   "prompt": {},
   "proxy": {
@@ -17,6 +17,6 @@
     "e2e"
   ],
   "siteName": "AI Gen Test",
-  "lastModified": "2026-04-13T18:02:41.091Z",
+  "lastModified": "2026-04-13T18:03:44.989Z",
   "lastModifiedBy": "ai-pipeline"
 }
