@@ -10,13 +10,13 @@
   "mode": "http",
   "needsAuth": false,
   "credentialsRef": null,
-  "version": 1,
+  "version": 2,
   "siteId": "aigene2e177610586917341",
   "siteName": "AI Gen Test",
   "proxy": {
     "enabled": false
   },
   "prompt": {},
-  "lastModified": "2026-04-13T18:45:21.773Z",
+  "lastModified": "2026-04-13T18:45:27.967Z",
   "lastModifiedBy": "ai-pipeline"
 }
