@@ -1,0 +1,32 @@
+{
+  "siteId": "demo-browser",
+  "siteName": "Demo Browser (quotes.toscrape.com)",
+  "url": "https://quotes.toscrape.com",
+  "mode": "browser",
+  "needsAuth": false,
+  "credentialsRef": null,
+  "maxRPS": 2,
+  "proxy": {
+    "enabled": false,
+    "poolId": null,
+    "overrideUrl": null
+  },
+  "timeout": 30000,
+  "retries": 1,
+  "tags": ["demo", "test", "browser"],
+  "version": 1,
+  "lastModified": "2026-04-13T00:00:00Z",
+  "lastModifiedBy": "manual",
+  "healthCheckQuery": "love",
+  "prompt": {
+    "customInstructions": "quotes.toscrape.com is a stable Playwright playground. We navigate to the search-by-tag URL and extract quote blocks.",
+    "selectorHints": {
+      "resultRow": ".quote",
+      "partNumber": ".quote small.author",
+      "name": ".quote span.text",
+      "brand": ".quote .tags .tag"
+    },
+    "knownIssues": "Public demo site; expect 200 OK on all tag pages. No anti-bot defenses, so it's a fair browser-mode test fixture.",
+    "apiNotes": null
+  }
+}
