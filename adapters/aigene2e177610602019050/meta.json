@@ -12,11 +12,11 @@
   "tags": [
     "e2e"
   ],
-  "version": 1,
+  "version": 2,
   "siteId": "aigene2e177610602019050",
   "retries": 1,
   "healthCheckQuery": "phone",
   "needsAuth": false,
-  "lastModified": "2026-04-13T18:47:53.062Z",
+  "lastModified": "2026-04-13T18:47:59.162Z",
   "lastModifiedBy": "ai-pipeline"
 }
