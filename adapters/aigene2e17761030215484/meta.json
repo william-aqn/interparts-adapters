@@ -8,7 +8,7 @@
   "maxRPS": 3,
   "siteId": "aigene2e17761030215484",
   "needsAuth": false,
-  "version": 1,
+  "version": 2,
   "prompt": {},
   "siteName": "AI Gen Test",
   "url": "https://dummyjson.com",
@@ -17,6 +17,6 @@
     "enabled": false
   },
   "retries": 1,
-  "lastModified": "2026-04-13T17:58:08.499Z",
+  "lastModified": "2026-04-13T17:59:13.403Z",
   "lastModifiedBy": "ai-pipeline"
 }
