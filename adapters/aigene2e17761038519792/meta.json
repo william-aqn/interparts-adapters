@@ -11,12 +11,12 @@
   "tags": [
     "e2e"
   ],
-  "version": 1,
+  "version": 2,
   "prompt": {},
   "siteId": "aigene2e17761038519792",
   "url": "https://dummyjson.com",
   "timeout": 10000,
   "healthCheckQuery": "phone",
-  "lastModified": "2026-04-13T18:11:43.668Z",
+  "lastModified": "2026-04-13T18:12:47.667Z",
   "lastModifiedBy": "ai-pipeline"
 }
