@@ -2,7 +2,7 @@
   "tags": [
     "e2e"
   ],
-  "version": 1,
+  "version": 2,
   "credentialsRef": null,
   "maxRPS": 3,
   "proxy": {
@@ -17,6 +17,6 @@
   "siteId": "aigene2e17761026313408",
   "url": "https://dummyjson.com",
   "needsAuth": false,
-  "lastModified": "2026-04-13T17:51:39.318Z",
+  "lastModified": "2026-04-13T17:52:44.219Z",
   "lastModifiedBy": "ai-pipeline"
 }
