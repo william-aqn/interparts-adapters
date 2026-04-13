@@ -13,10 +13,13 @@
   },
   "timeout": 10000,
   "retries": 1,
-  "tags": ["demo", "test"],
+  "tags": [
+    "demo",
+    "test"
+  ],
   "version": 1,
-  "lastModified": "2026-04-13T00:00:00Z",
-  "lastModifiedBy": "manual",
+  "lastModified": "2026-04-13T18:42:48.276Z",
+  "lastModifiedBy": "ai-pipeline",
   "healthCheckQuery": "phone",
   "prompt": {
     "customInstructions": "dummyjson.com provides a stable public JSON test API. Use GET /products/search?q=<query> — returns { products: [...] }. No HTML parsing needed despite mode:http.",
