@@ -1,0 +1,25 @@
+{
+  "maxRPS": 5,
+  "prompt": {
+    "customInstructions": "Test site for AI Pipeline Phase 4."
+  },
+  "siteId": "gen-test",
+  "mode": "http",
+  "credentialsRef": null,
+  "healthCheckQuery": "phone",
+  "url": "https://dummyjson.com",
+  "timeout": 10000,
+  "version": 1,
+  "proxy": {
+    "enabled": false
+  },
+  "needsAuth": false,
+  "retries": 1,
+  "tags": [
+    "test",
+    "ai-gen"
+  ],
+  "siteName": "AI Gen Test (dummyjson.com)",
+  "lastModified": "2026-04-13T10:58:02.503Z",
+  "lastModifiedBy": "ai-pipeline"
+}
