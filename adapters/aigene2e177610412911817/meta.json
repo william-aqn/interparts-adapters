@@ -4,7 +4,7 @@
   "mode": "http",
   "credentialsRef": null,
   "retries": 1,
-  "version": 1,
+  "version": 2,
   "prompt": {},
   "siteId": "aigene2e177610412911817",
   "needsAuth": false,
@@ -17,6 +17,6 @@
     "e2e"
   ],
   "healthCheckQuery": "phone",
-  "lastModified": "2026-04-13T18:16:21.953Z",
+  "lastModified": "2026-04-13T18:16:31.356Z",
   "lastModifiedBy": "ai-pipeline"
 }
