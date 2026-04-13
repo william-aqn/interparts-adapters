@@ -2,7 +2,7 @@
   "tags": [
     "e2e"
   ],
-  "version": 1,
+  "version": 2,
   "mode": "http",
   "credentialsRef": null,
   "maxRPS": 3,
@@ -17,6 +17,6 @@
     "enabled": false
   },
   "prompt": {},
-  "lastModified": "2026-04-13T17:49:04.327Z",
+  "lastModified": "2026-04-13T17:49:09.327Z",
   "lastModifiedBy": "ai-pipeline"
 }
