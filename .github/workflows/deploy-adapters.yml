@@ -1,0 +1,63 @@
+# deploy-adapters.yml — sync adapters repo to the server.
+#
+# On push to main: SSH into DEPLOY_HOST, `git pull` in /opt/interparts-adapters/.
+# Worker containers watch this directory via `fs.watch` and hot-swap adapters.
+#
+# If DEPLOY_HOST is not configured, job emits a warning and exits 0 (skipped).
+
+name: "Deploy: Adapters"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "adapters/**"
+      - "shared/**"
+      - "templates/**"
+
+concurrency:
+  group: deploy-adapters
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: "Sync adapters to server"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check deploy secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.DEPLOY_HOST }}" ]; then
+            echo "::warning::DEPLOY_HOST not configured — skipping sync job."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare SSH
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync via SSH
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          ssh -i ~/.ssh/key -p "${{ secrets.DEPLOY_PORT }}" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<'SCRIPT'
+              set -euo pipefail
+              cd /opt/interparts-adapters
+              git fetch origin main
+              git reset --hard origin/main
+              echo "=== $(git log --oneline -1) ==="
+              echo "=== Adapters synced — workers will hot-swap via fs.watch ==="
+          SCRIPT
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -rf ~/.ssh/key
