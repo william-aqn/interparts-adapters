@@ -14,9 +14,9 @@
   "url": "https://dummyjson.com",
   "maxRPS": 3,
   "timeout": 10000,
-  "version": 1,
+  "version": 2,
   "needsAuth": false,
   "retries": 1,
-  "lastModified": "2026-04-13T18:26:10.034Z",
+  "lastModified": "2026-04-13T18:26:19.630Z",
   "lastModifiedBy": "ai-pipeline"
 }
