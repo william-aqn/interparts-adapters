@@ -2,7 +2,7 @@
   "url": "https://dummyjson.com",
   "mode": "http",
   "retries": 1,
-  "version": 1,
+  "version": 2,
   "maxRPS": 3,
   "timeout": 10000,
   "healthCheckQuery": "phone",
@@ -17,6 +17,6 @@
     "e2e"
   ],
   "prompt": {},
-  "lastModified": "2026-04-14T06:34:15.629Z",
+  "lastModified": "2026-04-14T06:34:25.324Z",
   "lastModifiedBy": "ai-pipeline"
 }
