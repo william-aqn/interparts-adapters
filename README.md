@@ -2,113 +2,138 @@
 
 Адаптеры для ~60 сайтов-поставщиков автозапчастей. Каждый адаптер реализует единый контракт `PartSearchAdapter` и работает в одном из трёх режимов: `api`, `http`, `browser`.
 
-Этот репозиторий — отдельный от инфраструктуры ([`interparts-core`](https://github.com/william-aqn/interparts-core)). Причина разделения: AI Pipeline автоматически коммитит сюда сгенерированный/починенный код — такие автокоммиты не должны засорять историю инфраструктурного кода (см. ТЗ §11).
+Этот репозиторий отделён от инфраструктуры ([`interparts-core`](https://github.com/william-aqn/interparts-core)), потому что AI Pipeline автоматически коммитит сюда сгенерированный/починенный код — такие автокоммиты не должны засорять историю инфраструктурного кода (см. ТЗ §11).
+
+> **Статус**: рабочий демо-адаптер (`demo-http` → dummyjson.com), AI Pipeline генерирует и чинит адаптеры автоматически через Claude API.
 
 ## Структура
 
 ```
 interparts-adapters/
 ├── adapters/
-│   └── demo-http/               # Phase 1: один демо-адаптер через dummyjson.com
-│       ├── adapter.ts
-│       ├── adapter.test.ts
-│       └── meta.json
+│   ├── demo-http/                 # Демо-адаптер (dummyjson.com, mode: http)
+│   │   ├── adapter.ts             # Реализация PartSearchAdapter
+│   │   ├── adapter.test.ts        # E2E тест (vitest, реальный HTTP)
+│   │   └── meta.json              # Конфиг: url, mode, limits, prompt hints
+│   ├── demo-api/                  # Демо: API-режим
+│   └── demo-browser/              # Демо: Browser-режим (Playwright)
 ├── shared/
 │   ├── interfaces/
-│   │   └── adapter.types.ts     # Копия из interparts-core (source of truth)
-│   ├── utils/                   # Вспомогательные функции (phase 2+)
-│   └── test-helpers/            # E2E runner (phase 4)
+│   │   └── adapter.types.ts       # Контракт (КОПИЯ из interparts-core)
+│   ├── test-helpers/              # Mock ExecutionContext для тестов
+│   └── utils/                     # Общие утилиты парсинга
 ├── templates/
-│   ├── prompt-generate.md       # Шаблон для AI: генерация нового адаптера (phase 4)
-│   └── prompt-fix.md            # Шаблон для AI: починка сломанного адаптера (phase 4)
-└── .github/workflows/
-    └── deploy-adapters.yml      # SSH + git pull на сервере
+│   ├── prompt-generate.md         # Mustache-шаблон: промпт для генерации адаптера
+│   └── prompt-fix.md              # Mustache-шаблон: промпт для починки адаптера
+├── package.json                   # Node >=22, TypeScript 5.6, vitest, cheerio
+└── tsconfig.json                  # strict, noUncheckedIndexedAccess, ES2022
 ```
 
 ## Контракт адаптера
 
-Source of truth — `interparts-core/workers/src/interfaces/adapter.types.ts`.
-Копия в этом репо — `shared/interfaces/adapter.types.ts`.
-
-Главный интерфейс:
+Source of truth: `interparts-core/workers/src/interfaces/adapter.types.ts`.
+Копия здесь: `shared/interfaces/adapter.types.ts`.
 
 ```typescript
-interface PartSearchAdapter {
-  readonly siteId: string;
-  readonly siteName: string;
-  readonly capabilities: AdapterCapabilities;  // mode, needsAuth, maxRPS, etc.
+import type { PartSearchAdapter } from '../../shared/interfaces/adapter.types.js';
 
-  initialize(ctx: ExecutionContext): Promise<void>;
-  authenticate?(ctx: ExecutionContext): Promise<void>;
-  search(ctx: ExecutionContext, query: PartQuery): Promise<PartResult[]>;
-  getPartDetails?(ctx: ExecutionContext, partNumber: string): Promise<PartDetails>;
-  checkAvailability?(ctx: ExecutionContext, partNumbers: string[]): Promise<Map<string, AvailabilityStatus>>;
-  healthCheck(ctx: ExecutionContext): Promise<HealthStatus>;
-}
+const adapter: PartSearchAdapter = {
+  siteId: 'example',
+  siteName: 'Example Parts',
+  capabilities: { mode: 'http', needsAuth: false, supportsBulkSearch: false,
+                  maxRPS: 3, searchByVIN: false, searchByCross: false },
+
+  async initialize(ctx) { /* one-time setup */ },
+  async search(ctx, query) { /* returns PartResult[] */ },
+  async healthCheck(ctx) { /* quick sanity probe */ },
+};
+
+export default adapter;
 ```
 
-Каждый адаптер:
-- Default-экспортирует объект, реализующий этот интерфейс
-- Имеет `meta.json` с конфигом (`siteId`, `mode`, `needsAuth`, `maxRPS`, ...)
-- Имеет `adapter.test.ts` — E2E тест с реальным запросом
+## Три режима
 
-## Три режима адаптера
+| Mode | Runtime | RAM | Когда |
+|------|---------|-----|-------|
+| `api` | `ctx.fetch` → JSON | ~100 MB | Сайт имеет JSON API |
+| `http` | `ctx.fetch` + Cheerio → HTML | ~150 MB | Простой HTML, без JS |
+| `browser` | Playwright `ctx.page` | ~1.5 GB | SPA, AJAX, анти-бот |
 
-| Mode | Runtime | Dockerfile | RAM | Когда использовать |
-|------|---------|-----------|-----|--------------------|
-| `api` | `ctx.fetch` → JSON | Dockerfile.light | ~100 MB | Сайт предоставляет публичный/дилерский API |
-| `http` | `ctx.fetch` → HTML + Cheerio | Dockerfile.light | ~150 MB | Простая HTML-страница без JS-рендеринга |
-| `browser` | Playwright `ctx.page` | Dockerfile.browser | ~1.5 GB | SPA, JS-рендеринг, AJAX, анти-бот защита |
-
-Принцип: **всегда выбирай минимально достаточный режим**. 90% сайтов должны работать через `http`.
+**Принцип: всегда минимально достаточный режим.** 90% сайтов — `http`.
 
 ## Быстрый старт
 
 ```bash
 cd interparts-adapters
 npm install
-npx tsc --noEmit           # проверка типов
-npx vitest run             # запуск тестов (включая E2E demo-http → dummyjson.com)
+npx tsc --noEmit                   # проверка типов
+npx vitest run                     # все E2E тесты
+npx vitest run adapters/demo-http  # один адаптер
 ```
 
-## Демо-адаптер (Phase 1)
+## AI Pipeline (автоматическая генерация)
 
-`adapters/demo-http/` — минимальный рабочий адаптер через публичный JSON API dummyjson.com. Не требует credentials, стабилен, демонстрирует полный контур:
+AI Pipeline в `interparts-core` автоматически:
+1. Генерирует адаптеры по `templates/prompt-generate.md` + мета-данные сайта + HTML
+2. Чинит сломанные по `templates/prompt-fix.md` + ошибки + предыдущий код
+3. Валидирует: `tsc` → `CodeValidator` (security) → E2E тест (реальный HTTP)
+4. При успехе: `git commit` + `git push` автором `AI Pipeline <ai@interparts.io>`
+5. Workers подхватывают через `fs.watch` → hot-swap без рестарта
+
+### Правила безопасности (CodeValidator)
+
+| Запрещено | Почему |
+|-----------|--------|
+| Обращение к URL вне `meta.json` | Только url + apiNotes из конфига |
+| `process.env` (кроме `PLAYWRIGHT_SKIP`) | Изоляция от окружения |
+| `eval()`, `new Function()` | Injection prevention |
+| `child_process`, `fs.write*`, `net.*` | Песочница |
+| Прямой import `http`/`node-fetch`/`axios` | Только `ctx.fetch` |
+| Хардкод credentials | Только `ctx.credentials` |
+
+## Файлы адаптера
 
 ```
-BullMQ task → Worker → AdapterLoader → demo-http.search() → ctx.fetch(dummyjson) → PartResult[]
+adapters/<siteId>/
+  adapter.ts          # Реализация PartSearchAdapter
+  adapter.test.ts     # E2E тест (vitest)
+  meta.json           # siteId, url, mode, limits, healthCheckQuery, prompt hints
 ```
 
-Использование для верификации Phase 1:
+### meta.json (минимальный)
+
+```json
+{
+  "siteId": "example",
+  "siteName": "Example Parts",
+  "url": "https://example.com",
+  "mode": "http",
+  "needsAuth": false,
+  "maxRPS": 3,
+  "timeout": 15000,
+  "retries": 2,
+  "tags": ["ru"],
+  "version": 1,
+  "healthCheckQuery": "1K0615301AA",
+  "prompt": { "customInstructions": null, "selectorHints": {}, "knownIssues": null, "apiNotes": null }
+}
+```
+
+## Синхронизация adapter.types.ts
+
+При изменении типов в `interparts-core`:
 ```bash
-npx vitest run adapters/demo-http/adapter.test.ts
+cp ../interparts-core/workers/src/interfaces/adapter.types.ts shared/interfaces/adapter.types.ts
 ```
-
-## Взаимодействие с AI Pipeline (Phase 4+)
-
-В будущем AI Pipeline будет:
-1. Генерировать новые адаптеры по `templates/prompt-generate.md`
-2. Чинить сломанные адаптеры по `templates/prompt-fix.md`
-3. Коммитить результат с автором `AI Pipeline <ai@interparts.io>`
-
-Каждый коммит от AI проходит через:
-- `tsc --noEmit` — проверка типов
-- `CodeValidator` — защита от prompt injection (см. ТЗ §19)
-- E2E тест — реальный запрос к сайту поставщика
-- Только при успехе всех трёх — `git commit + push`
-
-## Синхронизация `adapter.types.ts`
-
-Пока вручную (Phase 1). В Phase 6 — GitHub Action автоматически создаёт PR при изменении типов в `interparts-core`.
-
-**Если нужно изменить типы:**
-1. Обновить в `interparts-core/workers/src/interfaces/adapter.types.ts`
-2. Скопировать в `interparts-adapters/shared/interfaces/adapter.types.ts`
-3. Коммитить в ОБА репо с одинаковым сообщением
+Никогда не редактировать копию напрямую — source of truth в core.
 
 ## Деплой
 
-Workers на сервере читают адаптеры из `/opt/interparts-adapters/adapters:/app/adapters:ro` через bind mount. Любое изменение в этом репо → GitHub Action → `git pull` на сервере → workers подхватывают через `fs.watch` (hot-swap).
+Workers читают адаптеры из bind mount:
+```
+/opt/interparts-adapters/adapters:/app/adapters:ro
+```
+Push в этот репо → GitHub Action → `git pull` на сервере → workers подхватывают через `fs.watch` (hot-swap).
 
 ## Лицензия
 

@@ -1,85 +1,133 @@
 # CLAUDE.md — guidance for Claude sessions on `interparts-adapters`
 
-> Этот файл — ориентир для Claude-агентов (включая AI Pipeline в Phase 4+), которые будут генерировать, чинить и поддерживать адаптеры.
+> This file is a reference for Claude agents — both human-driven sessions and
+> the automated AI Pipeline (ai-pipeline service in interparts-core) that
+> generates and fixes adapters autonomously.
 
-## Проект
+## Project
 
-Адаптеры для ~60 сайтов-поставщиков автозапчастей в рамках Inter Parts Aggregator.
-Полное ТЗ: `../interparts-info/README.md` (если доступен локально).
-Инфраструктура: [`interparts-core`](https://github.com/william-aqn/interparts-core).
+Per-supplier adapters for Inter Parts Aggregator — parallel auto parts search
+across ~60 websites. Full spec: `../interparts-info/README.md` (section 4 for
+adapter contract, section 9 for AI pipeline, section 19 for security rules).
 
-## Жёсткие правила для адаптеров
+Two sibling repositories (must share the same parent directory):
+- **`interparts-adapters`** (this) — adapters, shared types, prompt templates
+- **`interparts-core`** — infrastructure: microservices, Docker, CI/CD, tests
 
-**Безопасность (критично — в Phase 4 будет проверяться CodeValidator):**
-- НЕ обращаться ни к каким URL, кроме указанных в `meta.json` (поле `url` + явно описанные в `prompt.apiNotes`)
-- НЕ читать `process.env` (кроме `PLAYWRIGHT_SKIP` и `NODE_OPTIONS`)
-- НЕ использовать `eval()`, `new Function()`, `child_process`, `fs.write*`, `net.*`, `dgram.*`
-- НЕ импортировать `http`, `https`, `node-fetch`, `axios`, `got` напрямую — все HTTP ТОЛЬКО через `ctx.fetch`
-- Все credentials — ТОЛЬКО через `ctx.credentials` (никогда в коде)
-- НЕ писать файлы — только читать HTML и возвращать `PartResult[]`
+## Repository structure
 
-**Типизация:**
-- `strict: true` обязателен
-- Никаких `any`, используй `unknown` + type guards
-- Каждое поле `PartResult` (price, quantity) — парсить как число, не строку
+```
+interparts-adapters/
+  adapters/
+    <siteId>/
+      adapter.ts          # PartSearchAdapter implementation
+      adapter.test.ts     # E2E test (real HTTP, vitest)
+      meta.json           # site config (url, mode, limits, prompt hints)
+    demo-http/            # always-present demo adapter (dummyjson.com)
+    demo-api/             # API-mode demo
+    demo-browser/         # Browser-mode demo
+  shared/
+    interfaces/
+      adapter.types.ts    # COPY of interparts-core/workers/src/interfaces/adapter.types.ts
+    test-helpers/          # mock ExecutionContext for adapter tests
+    utils/                 # shared parsing utilities
+  templates/
+    prompt-generate.md    # Mustache template for Claude "generate" prompt
+    prompt-fix.md         # Mustache template for Claude "fix" prompt
+  package.json            # @interparts/adapters, Node >=22, vitest, cheerio
+  tsconfig.json           # strict, noUncheckedIndexedAccess, ES2022, NodeNext
+```
 
-**Ошибки и логирование:**
-- Try/catch с понятными сообщениями
-- Логирование через `ctx.logger` (info, warn, error)
-- Таймауты: `AbortController` для fetch, `timeout` для Playwright
+## Tech stack
 
-**Поля результата:**
-- `source` всегда = siteId из meta.json
-- `updatedAt` = `new Date()`
-- `currency` — ISO 4217 (RUB, USD, EUR, KZT)
-- Не выдумывай данные — если поле недоступно, оставь `undefined`
+- **TypeScript 5.6**, `strict: true`, `noUncheckedIndexedAccess: true`
+- **Node >= 22** (ESM, `"type": "module"`)
+- **Cheerio 1.x** — HTML parsing for `http` mode adapters
+- **Vitest 2.x** — E2E tests
+- **Playwright** — available via `ctx.page` for `browser` mode adapters (injected by worker runtime)
 
-## Контракт (`adapter.types.ts`)
+## Adapter contract
 
-Читай из `shared/interfaces/adapter.types.ts`. Это КОПИЯ из `interparts-core/workers/src/interfaces/`. Не меняй локально — только в source.
+Every adapter default-exports an object satisfying `PartSearchAdapter` from
+`shared/interfaces/adapter.types.ts`:
 
-Экспорт адаптера:
 ```typescript
 import type { PartSearchAdapter } from '../../shared/interfaces/adapter.types.js';
 
 const adapter: PartSearchAdapter = {
   siteId: 'example',
-  siteName: 'Example Site',
-  capabilities: { mode: 'http', needsAuth: false, ... },
+  siteName: 'Example Parts Store',
+  capabilities: { mode: 'http', needsAuth: false, supportsBulkSearch: false, maxRPS: 3, searchByVIN: false, searchByCross: false },
 
-  async initialize(ctx) { /* ... */ },
-  async search(ctx, query) { /* ... */ },
-  async healthCheck(ctx) { /* ... */ },
+  async initialize(ctx) { /* one-time setup: login, cookie fetch */ },
+  async search(ctx, query) { /* returns PartResult[] */ },
+  async healthCheck(ctx) { /* quick sanity probe */ },
 };
 
 export default adapter;
 ```
 
-## Файловая структура адаптера
+### Three modes
 
-```
-adapters/
-  <siteId>/
-    adapter.ts        # реализация PartSearchAdapter
-    adapter.test.ts   # E2E тест (реальный HTTP запрос)
-    meta.json         # конфиг
+| Mode | When to use | Available via `ctx` |
+|------|-------------|---------------------|
+| `api` | Site has a JSON API | `ctx.fetch` |
+| `http` | Simple HTML, no JS needed | `ctx.fetch`, `ctx.parseHtml` (Cheerio) |
+| `browser` | SPA, AJAX, anti-bot | `ctx.page`, `ctx.browserContext` (Playwright) |
+
+**Principle: always choose the lightest mode that works.** If `fetch(url)` returns usable HTML, don't use Playwright.
+
+### PartResult required fields
+
+```typescript
+{
+  partNumber: string;     // raw OEM/article number
+  brand: string;
+  name: string;
+  price: number;          // parsed as number, NOT string
+  currency: string;       // ISO 4217: RUB, USD, EUR, KZT
+  availability: 'in_stock' | 'on_order' | 'out_of_stock' | 'unknown';
+  source: string;         // MUST equal siteId from meta.json
+  updatedAt: Date;        // new Date()
+}
 ```
 
-## meta.json — минимальный пример
+Optional: `quantity`, `deliveryDays`, `deliveryCity`, `warehouse`, `sourceUrl`, `imageUrl`, `crossNumbers`.
+
+**Never fabricate data** — if a field is unavailable on the page, leave it `undefined`.
+
+## Security rules (CRITICAL)
+
+These are enforced by `CodeValidator` in the AI Pipeline before any code is committed.
+Violations cause immediate rejection.
+
+| Rule | Detail |
+|------|--------|
+| No unauthorized URLs | Only access URLs from `meta.json` (`url` field + `prompt.apiNotes`) |
+| No `process.env` | Except `PLAYWRIGHT_SKIP` and `NODE_OPTIONS` |
+| No `eval()` / `new Function()` | Never |
+| No `child_process` / `fs.write*` / `net.*` / `dgram.*` | Never |
+| No direct HTTP imports | No `http`, `https`, `node-fetch`, `axios`, `got` — all HTTP via `ctx.fetch` |
+| No hardcoded credentials | All auth via `ctx.credentials` |
+| No file writes | Read-only: parse HTML/JSON, return `PartResult[]` |
+
+## meta.json schema
 
 ```json
 {
   "siteId": "example",
-  "siteName": "Example Site",
+  "siteName": "Example Parts Store",
   "url": "https://example.com",
   "mode": "http",
   "needsAuth": false,
+  "credentialsRef": null,
   "maxRPS": 3,
+  "proxy": { "enabled": false, "poolId": null, "overrideUrl": null },
   "timeout": 15000,
   "retries": 2,
-  "tags": ["demo"],
+  "tags": ["ru", "commercial"],
   "version": 1,
-  "healthCheckQuery": "test-part-number",
+  "healthCheckQuery": "1K0615301AA",
   "prompt": {
     "customInstructions": null,
     "selectorHints": {},
@@ -89,70 +137,105 @@ adapters/
 }
 ```
 
-См. ТЗ §4 для полной схемы.
+See spec section 4 for the full schema.
 
-## Режимы (выбор)
+## E2E tests (mandatory for every adapter)
 
-| Mode | Когда | Библиотеки (доступны через ctx) |
-|------|-------|----------------------------------|
-| `api` | Сайт имеет JSON API | `ctx.fetch` |
-| `http` | Простой HTML без JS | `ctx.fetch`, `ctx.parseHtml` (Cheerio) |
-| `browser` | SPA, AJAX, анти-бот | `ctx.page`, `ctx.browserContext` (Playwright) |
+Each adapter must have `adapter.test.ts`:
 
-Принцип: **всегда минимальный достаточный**. Если `fetch(url)` возвращает нужный HTML — не используй Playwright.
+```typescript
+import { describe, it, expect } from 'vitest';
+import adapter from './adapter.js';
+import { createTestContext } from '../../shared/test-helpers/context.js';
+import meta from './meta.json' with { type: 'json' };
 
-## E2E тесты — обязательно
-
-Каждый адаптер должен иметь `adapter.test.ts`, который:
-1. Импортирует адаптер
-2. Создаёт minimal mock `ExecutionContext` с реальным fetch
-3. Вызывает `adapter.search(ctx, { partNumber: meta.healthCheckQuery })`
-4. Проверяет: результат ≥ 1 `PartResult`, все обязательные поля заполнены
-
-Тесты пишутся в `vitest`. Запуск: `npx vitest run`.
-
-## Для AI Pipeline (Phase 4+)
-
-Когда AI Pipeline будет генерировать или чинить адаптер:
-1. Читает `templates/prompt-generate.md` или `templates/prompt-fix.md`
-2. Собирает контекст: `meta.json`, HTML, screenshot, предыдущий код
-3. Вызывает Claude API (sonnet) с санитизированным HTML (см. ТЗ §19)
-4. Извлекает код из ответа, прогоняет через `tsc` + `CodeValidator` + E2E
-5. При успехе: `git add adapters/<siteId>/ && git commit && git push`
-6. Workers на сервере подхватывают через `fs.watch` → hot-swap
-
-## Часто встречающиеся задачи
-
-### Добавить новый адаптер вручную (для тестирования)
-```bash
-mkdir -p adapters/newsite
-# Создать adapter.ts, meta.json, adapter.test.ts
-npx tsc --noEmit
-npx vitest run adapters/newsite/adapter.test.ts
+describe(meta.siteId, () => {
+  it('returns at least 1 result for the health-check query', async () => {
+    const ctx = createTestContext(meta);
+    await adapter.initialize(ctx);
+    const results = await adapter.search(ctx, { partNumber: meta.healthCheckQuery });
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    for (const r of results) {
+      expect(r.partNumber).toBeTruthy();
+      expect(r.brand).toBeTruthy();
+      expect(typeof r.price).toBe('number');
+      expect(r.source).toBe(meta.siteId);
+    }
+  });
+});
 ```
 
-### Проверить типы во всём проекте
-```bash
-npx tsc --noEmit
-```
+## AI Pipeline flow (automated adapter generation)
 
-### Прогнать все тесты
-```bash
-npx vitest run
-```
+When the AI Pipeline service in `interparts-core` processes a generate/fix job:
 
-### Синхронизировать adapter.types.ts после изменения в core
+1. Reads `templates/prompt-generate.md` (or `prompt-fix.md`)
+2. Collects context: `meta.json`, fetched HTML/screenshot, previous adapter code (for fix), error text
+3. Calls Claude API (sonnet) with sanitized HTML (spec section 19 — prompt injection defense)
+4. Extracts TypeScript from Claude's response
+5. Validates: `tsc --noEmit` → `CodeValidator` (security scan) → E2E test run
+6. On success: `git add adapters/<siteId>/ && git commit && git push`
+7. Workers on the server detect changes via `fs.watch` → hot-swap adapter
+
+The prompt templates use Mustache-style `{{VARIABLE}}` placeholders filled by the pipeline.
+
+## Git conventions
+
+- **Commits by AI Pipeline**: `feat(<siteId>): auto-generated adapter v<N>` or `fix(<siteId>): auto-fixed adapter v<N>`
+- **Manual commits**: conventional format — `feat(<siteId>): ...`, `fix(<siteId>): ...`
+- Many AI-generated test adapters (`aigene2e*`) accumulate from E2E test runs — these are harmless and can be cleaned up periodically
+
+## adapter.types.ts sync
+
+`shared/interfaces/adapter.types.ts` is a **copy** of `interparts-core/workers/src/interfaces/adapter.types.ts`.
+
+**The source of truth is in interparts-core.** If the interface changes:
 ```bash
 cp ../interparts-core/workers/src/interfaces/adapter.types.ts shared/interfaces/adapter.types.ts
 ```
 
-## Ссылки на ТЗ
+Never edit the copy directly — changes would be overwritten on next sync.
 
-| Тема | Раздел |
-|------|--------|
-| Контракт адаптера | §4 |
-| Три режима — примеры | §5 |
-| meta.json — полная схема | §4 |
-| AI Pipeline + промпты | §9 |
-| Защита от prompt injection | §19 |
-| Правила для AI-генерации | §19 (конец) |
+## Common tasks
+
+### Add a new adapter manually
+```bash
+mkdir -p adapters/newsite
+# Create adapter.ts, meta.json, adapter.test.ts
+npx tsc --noEmit                              # type check
+npx vitest run adapters/newsite/adapter.test.ts  # E2E test
+```
+
+### Type-check the whole project
+```bash
+npx tsc --noEmit
+```
+
+### Run all E2E tests
+```bash
+npx vitest run
+```
+
+### Run a single adapter's test
+```bash
+npx vitest run adapters/demo-http/adapter.test.ts
+```
+
+### Clean up leftover AI-generated test adapters
+```bash
+# Remove adapters created by E2E test runs (aigene2e* prefix)
+rm -rf adapters/aigene2e*
+git add -A && git commit -m "chore: clean up E2E test adapters"
+```
+
+## Spec reference
+
+| Topic | Section |
+|-------|---------|
+| Adapter contract & interface | 4 |
+| Three worker modes — examples | 5 |
+| meta.json full schema | 4 |
+| AI Pipeline flow + prompts | 9 |
+| Prompt injection defense | 19 |
+| Rules for AI-generated code | 19 (end) |
+| MongoDB adapter schemas | 10.2 |
