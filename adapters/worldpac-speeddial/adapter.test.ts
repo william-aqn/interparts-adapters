@@ -25,20 +25,24 @@ describe('worldpac-speeddial adapter', () => {
     expect(adapter.authenticate).toBeTypeOf('function');
   });
 
-  it('does NOT opt into persistent-session mode (SPA rehydrates stale /#/pna)', () => {
-    // See capabilities.supportsPersistentSession in adapter.ts for the why.
-    expect(adapter.capabilities.supportsPersistentSession).toBe(false);
+  it('opts into persistent-session mode', () => {
+    expect(adapter.capabilities.supportsPersistentSession).toBe(true);
   });
 
   it('search() signals AuthRequiredError when the SPA lands on /#/login', async () => {
-    // Fake page stub — enough for search() to reach the onLogin branch before
-    // needing a real #searchTerm. goto() is a no-op, then `evaluate` returns
-    // true for the login-hash probe, after which search() throws.
+    // Fake page stub — the adapter first checks for #searchTerm, goes to
+    // HOME if absent, waits for the selector, then checks the login hash.
+    // We short-circuit by claiming the selector is already present and then
+    // returning `true` for the login-hash probe.
     const ctx = createTestContext();
     const fakePage = {
       async goto() { return undefined; },
-      async evaluate<R>(fn: () => R): Promise<R> {
+      async waitForSelector() { return undefined; },
+      async evaluate<R>(fn: (arg?: unknown) => R): Promise<R> {
         const src = fn.toString();
+        if (src.includes("document.querySelector('#searchTerm')")) {
+          return true as unknown as R;
+        }
         if (src.includes("location.hash.startsWith('#/login')")) {
           return true as unknown as R;
         }

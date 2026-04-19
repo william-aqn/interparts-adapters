@@ -67,6 +67,44 @@ function pageOf(ctx: ExecutionContext): PlaywrightPageLike {
   return ctx.page as PlaywrightPageLike;
 }
 
+/** Poll `.product-quote` count until it stays constant for ~800ms or 10s
+ *  elapses, then snapshot count + first row text. This gives the SPA time
+ *  to finish rehydrating the previous /#/pna view from localStorage before
+ *  we take the "before" signature — otherwise our pre-search baseline could
+ *  be empty while the DOM is about to grow with stale rows, and the change
+ *  detection downstream would trip on the rehydration instead of the real
+ *  new-search response. */
+async function waitForStableQuotes(
+  page: PlaywrightPageLike,
+): Promise<{ count: number; firstText: string }> {
+  const MAX_MS = 10_000;
+  const STABLE_MS = 800;
+  const POLL_MS = 200;
+  const started = Date.now();
+  let lastCount = -1;
+  let stableSince = 0;
+  let snap: { count: number; firstText: string } = { count: 0, firstText: '' };
+  while (Date.now() - started < MAX_MS) {
+    snap = await page.evaluate(() => {
+      const quotes = document.querySelectorAll('.product-quote');
+      const first = quotes[0] as HTMLElement | null;
+      return {
+        count: quotes.length,
+        firstText: first ? (first.innerText || '').trim().slice(0, 200) : '',
+      };
+    });
+    if (snap.count === lastCount) {
+      if (stableSince === 0) stableSince = Date.now();
+      else if (Date.now() - stableSince >= STABLE_MS) break;
+    } else {
+      lastCount = snap.count;
+      stableSince = 0;
+    }
+    await new Promise((r) => setTimeout(r, POLL_MS));
+  }
+  return snap;
+}
+
 // ─── Page-side helpers (serialized & run inside the browser) ─────────────
 // Kept as string-building fns so Playwright's page.evaluate receives plain functions.
 
@@ -164,14 +202,7 @@ const adapter: PartSearchAdapter = {
     maxRPS: 1,
     searchByVIN: false,
     searchByCross: false,
-    // NOTE: speedDIAL 2.0 aggressively rehydrates the previous /#/pna view
-    // from localStorage (wp-search-response-part/product) on every page load.
-    // In persistent-session mode the dedicated BrowserContext's localStorage
-    // survives across jobs, so the SPA serves the previous query's DOM while
-    // the new fetch is still in flight — scraped results end up off-by-one.
-    // Clearing those cache keys breaks the auth state (shared storage).
-    // Leaving as false so operators can't silently enable the buggy mode.
-    supportsPersistentSession: false,
+    supportsPersistentSession: true,
   },
 
   async initialize(ctx: ExecutionContext): Promise<void> {
@@ -255,13 +286,12 @@ const adapter: PartSearchAdapter = {
     }
     const page = pageOf(ctx);
 
-    // If we somehow landed on login, session expired. Signal to runtime.
-    const onLogin = await page.evaluate(() => location.hash.startsWith('#/login')).catch(() => true);
-    if (onLogin) {
-      throw authRequired('worldpac-speeddial: session expired (landed on /#/login)');
-    }
-
-    // Ensure the search bar is mounted (home shell or any authenticated route).
+    // Ensure the SPA shell is mounted. The search bar lives in the top
+    // header and persists across routes. On a fresh page we must navigate
+    // to the app origin first — goto(HOME_URL) renders the authenticated
+    // shell (cookies carry the session); it does NOT clear cached /#/pna
+    // rows from a prior search, which the SPA rehydrates from localStorage
+    // on every page load.
     const hasBar = await page
       .evaluate(() => !!document.querySelector('#searchTerm'))
       .catch(() => false);
@@ -269,6 +299,32 @@ const adapter: PartSearchAdapter = {
       await page.goto(HOME_URL, { waitUntil: 'domcontentloaded', timeout: 45_000 });
       await page.waitForSelector('#searchTerm', { timeout: 30_000, state: 'visible' });
     }
+
+    // Now that #searchTerm is in the DOM, check the auth state. Login check
+    // happens after goto so a fresh page sees the real post-redirect state
+    // (the redirect can happen after the initial hash is set).
+    const onLogin = await page.evaluate(() => location.hash.startsWith('#/login')).catch(() => true);
+    if (onLogin) {
+      throw authRequired('worldpac-speeddial: session expired (landed on /#/login)');
+    }
+
+    // Capture the signature of the currently-rendered results AFTER the SPA
+    // has had time to rehydrate. speedDIAL rehydrates the previous /#/pna
+    // view from localStorage — on a persistent-session BrowserContext the
+    // cache survives across jobs, so the DOM already contains stale
+    // .product-quote rows before our new query has fired. We can't prevent
+    // the rehydration (clearing localStorage kills the auth state), so we
+    // wait for the quote count to stabilise, then snapshot both the count
+    // and the first row's text. After the new search lands the SPA replaces
+    // those rows with fresh data — either the count changes or the first
+    // row's text differs, and both are the signals we'll wait on below.
+    const stale = await waitForStableQuotes(page);
+    ctx.logger.info('worldpac-speeddial: pre-search snapshot', {
+      query: q,
+      staleCount: stale.count,
+      staleFirst: stale.firstText.slice(0, 60),
+      url: page.url(),
+    });
 
     await page.evaluate(
       ({ term, setterSrc }) => {
@@ -306,18 +362,59 @@ const adapter: PartSearchAdapter = {
       },
     );
 
-    // Wait for the PnA route to render results OR an empty-state.
-    await page.waitForFunction(
-      () => {
-        if (!location.hash.startsWith('#/pna')) return false;
-        if (document.querySelector('.product-quote')) return true;
-        const body = (document.body.innerText || '').toLowerCase();
-        if (/no (matching )?products?|no results|not found/.test(body)) return true;
-        return false;
-      },
-      null,
-      { timeout: 45_000, polling: 500 },
-    );
+    // Wait until either:
+    //   (a) the count of .product-quote rows changes from the pre-search
+    //       snapshot (new search returned a different number of results), OR
+    //   (b) the first row's text differs (same count, different products), OR
+    //   (c) an explicit empty-state "no products" message appears.
+    // Checking only "some .product-quote exists" is wrong for worldpac —
+    // the SPA rehydrates the previous query's rows before our pna360 fetch
+    // completes, so that signal would unblock on stale cached DOM.
+    try {
+      await page.waitForFunction(
+        (prev: { count: number; firstText: string }) => {
+          if (!location.hash.startsWith('#/pna')) return false;
+          const body = (document.body.innerText || '').toLowerCase();
+          if (/no (matching )?products?|no results|not found/.test(body)
+              && document.querySelectorAll('.product-quote').length === 0) {
+            return true;
+          }
+          const quotes = document.querySelectorAll('.product-quote');
+          if (quotes.length === 0) return false;
+          if (quotes.length !== prev.count) return true;
+          const first = quotes[0] as HTMLElement | null;
+          if (!first) return false;
+          const sig = (first.innerText || '').trim().slice(0, 200);
+          return sig.length > 0 && sig !== prev.firstText;
+        },
+        stale,
+        { timeout: 45_000, polling: 300 },
+      );
+    } catch (err) {
+      const nowSnap = await page
+        .evaluate(() => {
+          const quotes = document.querySelectorAll('.product-quote');
+          const first = quotes[0] as HTMLElement | null;
+          return {
+            hash: location.hash,
+            count: quotes.length,
+            firstText: first ? (first.innerText || '').trim().slice(0, 120) : '',
+            bodySample: (document.body.innerText || '').slice(0, 200),
+          };
+        })
+        .catch(() => null);
+      ctx.logger.warn('worldpac-speeddial: wait-for-change timed out', {
+        query: q,
+        staleCount: stale.count,
+        staleFirst: stale.firstText.slice(0, 60),
+        ...(nowSnap ? { current: nowSnap } : {}),
+      });
+      throw err;
+    }
+
+    // Give React a beat to finish reconciling the full result set so every
+    // row has its price, availability, and image src populated.
+    await new Promise((r) => setTimeout(r, 400));
 
     // Trigger lazy-load so .sd-part-image src populates with the real URL
     // instead of the placeholder SVG. speedDIAL uses IntersectionObserver —
