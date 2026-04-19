@@ -1,0 +1,35 @@
+{
+  "adapterId": "rockauto",
+  "name": "RockAuto",
+  "url": "https://www.rockauto.com",
+  "mode": "http",
+  "needsAuth": false,
+  "maxRPS": 2,
+  "timeout": 20000,
+  "retries": 2,
+  "tags": ["us", "commercial", "retail"],
+  "version": 1,
+  "lastModified": "2026-04-19T00:00:00Z",
+  "lastModifiedBy": "manual",
+  "prompt": {
+    "customInstructions": "RockAuto is a US online auto parts retailer. Search by part number: GET https://www.rockauto.com/en/partsearch/?partnum=<num>. Server-side HTML; no JS/auth needed. Response is a full HTML page, Content-Type text/html; charset=ISO-8859-1 but body actually uses Windows-1252 codepoints for currency (0x80 for Euro). Decode via new TextDecoder('windows-1252').decode(arrayBuffer).",
+    "selectorHints": {
+      "resultRow": "tbody.listing-inner",
+      "manufacturer": ".listing-final-manufacturer",
+      "partNumber": ".listing-final-partnumber",
+      "description": ".listing-text-row-moreinfo-truck .span-link-underline-remover",
+      "category": ".listing-footnote-text",
+      "unitPrice": "span.ra-formatted-amount.listing-price",
+      "totalPrice": "span.ra-formatted-amount.listing-total",
+      "moreInfoLink": "a.ra-btn-moreinfo",
+      "imageThumb": "img.listing-inline-image-thumb",
+      "imageFull": "img.listing-inline-image",
+      "oemCrossesSpan": "span[title^='Replaces these Alternate']",
+      "addToCartVisible": "[id^='vew_btnaddtocart']:not(.ra-hide)",
+      "notifyOOSVisible": "[id^='vew_btnnotifyoos']:not(.ra-hide)",
+      "noResultsText": "No Parts Found"
+    },
+    "knownIssues": "Currency is determined by visitor geolocation/cookie and cannot be forced via URL param — parse the symbol from the rendered price (€, $, £, etc.) and map to ISO 4217. Use .listing-price '(€X.XX/Each)' for the PER-UNIT price; .listing-total can be a quantity multiple (e.g. SBI valve guides sold in packs of 8 show total=€36.32 with unit=€4.54). Images are relative paths under /info/...; prepend https://www.rockauto.com. The moreinfo.php href is a usable per-product page.",
+    "apiNotes": "No public JSON API. Internal POST endpoints exist for cart (/catalog/catalogapi.php) but are session-coupled and not useful for search. Keep using GET /en/partsearch/?partnum=."
+  }
+}
