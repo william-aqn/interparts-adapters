@@ -286,6 +286,36 @@ const adapter: PartSearchAdapter = {
       { timeout: 45_000, polling: 500 },
     );
 
+    // Trigger lazy-load so .sd-part-image src populates with the real URL
+    // instead of the placeholder SVG. speedDIAL uses IntersectionObserver —
+    // scrolling each row into view is enough to kick off the fetch. Then
+    // wait briefly for all real URLs to resolve (or give up after 3s, in
+    // which case we fall back to the brand logo).
+    await page.evaluate(() => {
+      document.querySelectorAll('.product-quote img.sd-part-image').forEach((el) => {
+        (el as HTMLElement).scrollIntoView({ block: 'center' });
+      });
+    });
+    try {
+      await page.waitForFunction(
+        () => {
+          const imgs = Array.from(
+            document.querySelectorAll('.product-quote img.sd-part-image'),
+          ) as HTMLImageElement[];
+          if (imgs.length === 0) return true;
+          return imgs.every((el) => {
+            const s = el.currentSrc || el.src || '';
+            return s.length > 0 && !s.startsWith('data:');
+          });
+        },
+        null,
+        { timeout: 3_000, polling: 200 },
+      );
+    } catch {
+      // Non-fatal: rows without a resolved product photo fall back to the
+      // brand logo in the scrape below.
+    }
+
     const scraped: ScrapedQuote[] = await page.evaluate(() => {
       const text = (el: Element | null | undefined): string | null =>
         el ? (el as HTMLElement).innerText.trim() : null;
@@ -305,12 +335,24 @@ const adapter: PartSearchAdapter = {
 
       const quotes = Array.from(document.querySelectorAll('.product-quote'));
       return quotes.map((q) => {
-        const img = q.querySelector('img.sd-brand-image') as HTMLImageElement | null;
-        const brand = img?.alt || img?.title || null;
-        // Prefer the resolved `src` (img.src is always absolute via DOM API)
-        // over the source-order attribute; fall back to currentSrc for srcset.
-        const rawImg = img?.currentSrc || img?.src || img?.getAttribute('src') || null;
-        const imageUrl = rawImg && rawImg.trim().length > 0 ? rawImg : null;
+        const brandImg = q.querySelector('img.sd-brand-image') as HTMLImageElement | null;
+        const brand = brandImg?.alt || brandImg?.title || null;
+        // Prefer the real product photo (sd-part-image) over the brand logo
+        // (sd-brand-image). Some rows only have the brand logo — fall back
+        // then. `.src` from the DOM API is always absolute; currentSrc
+        // resolves srcset picks.
+        const partImg = q.querySelector('img.sd-part-image') as HTMLImageElement | null;
+        const pickSrc = (el: HTMLImageElement | null): string | null => {
+          if (!el) return null;
+          const raw = el.currentSrc || el.src || el.getAttribute('src') || '';
+          const t = raw.trim();
+          // Ignore inline SVG placeholders (lazy-load spinners and
+          // IMAGE NOT AVAILABLE fallbacks) — they're not real product
+          // photos and the caller prefers the brand logo in that case.
+          if (t.length === 0 || t.startsWith('data:')) return null;
+          return t;
+        };
+        const imageUrl = pickSrc(partImg) ?? pickSrc(brandImg);
         const links = Array.from(q.querySelectorAll('.product-detail-link')) as HTMLElement[];
         const name = text(q.querySelector('.product-description .bold-text')) ?? text(links[0]);
         const productId = q.querySelector('.product-detail-link.product-id') as HTMLElement | null;

@@ -19,6 +19,7 @@
       "loginSubmit": "form[data-testid=\"login-form\"] button[type=\"submit\"]",
       "searchInput": "#searchTerm",
       "resultRow": ".product-quote",
+      "partImg": ".product-quote img.sd-part-image",
       "brandImg": ".product-quote img.sd-brand-image",
       "descriptionTitle": ".product-quote .product-description .bold-text",
       "productId": ".product-quote .product-detail-link.product-id",
