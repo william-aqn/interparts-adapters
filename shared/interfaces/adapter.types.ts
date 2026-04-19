@@ -62,6 +62,8 @@ export interface PartResult {
   source: string;
   /** Direct URL to the product page when available. */
   sourceUrl?: string;
+  /** Direct URL to a product or brand thumbnail (for the admin UI). */
+  imageUrl?: string;
   updatedAt: Date;
   /** Original unparsed data, for debugging. */
   raw?: Record<string, unknown>;

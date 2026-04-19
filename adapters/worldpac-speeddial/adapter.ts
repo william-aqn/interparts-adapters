@@ -81,6 +81,7 @@ interface ScrapedQuote {
   qtyText: string | null;
   warehouse: string | null;
   deliveryText: string | null;
+  imageUrl: string | null;
 }
 
 // ─── Parsing helpers (run in Node) ───────────────────────────────────────
@@ -306,6 +307,10 @@ const adapter: PartSearchAdapter = {
       return quotes.map((q) => {
         const img = q.querySelector('img.sd-brand-image') as HTMLImageElement | null;
         const brand = img?.alt || img?.title || null;
+        // Prefer the resolved `src` (img.src is always absolute via DOM API)
+        // over the source-order attribute; fall back to currentSrc for srcset.
+        const rawImg = img?.currentSrc || img?.src || img?.getAttribute('src') || null;
+        const imageUrl = rawImg && rawImg.trim().length > 0 ? rawImg : null;
         const links = Array.from(q.querySelectorAll('.product-detail-link')) as HTMLElement[];
         const name = text(q.querySelector('.product-description .bold-text')) ?? text(links[0]);
         const productId = q.querySelector('.product-detail-link.product-id') as HTMLElement | null;
@@ -350,6 +355,7 @@ const adapter: PartSearchAdapter = {
           qtyText,
           warehouse,
           deliveryText: submitBy,
+          imageUrl,
         } as ScrapedQuote;
       });
     });
@@ -379,6 +385,7 @@ const adapter: PartSearchAdapter = {
       if (qty !== undefined) out.quantity = qty;
       if (r.warehouse) out.warehouse = r.warehouse;
       if (deliveryDays !== undefined) out.deliveryDays = deliveryDays;
+      if (r.imageUrl) out.imageUrl = r.imageUrl;
       results.push(out);
     }
 
