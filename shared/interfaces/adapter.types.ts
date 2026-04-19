@@ -33,6 +33,23 @@ export interface AdapterCapabilities {
   maxRPS: number;
   searchByVIN: boolean;
   searchByCross: boolean;
+  /** Adapter is compatible with persistent-session mode: initialize/authenticate
+   *  are idempotent and search throws AuthRequiredError on session expiry.
+   *  Absent = false (safe default for legacy adapters). */
+  supportsPersistentSession?: boolean;
+}
+
+/**
+ * Thrown by an adapter's search() when the server has expired the session and
+ * a fresh login is required. Only meaningful when the site has persistent
+ * session enabled — the runtime catches this, disposes the cached session, and
+ * retries once with a fresh authentication.
+ */
+export class AuthRequiredError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'authentication required');
+    this.name = 'AuthRequiredError';
+  }
 }
 
 // ─── Query / result shapes ───────────────────────────────────

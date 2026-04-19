@@ -23,6 +23,16 @@ import type {
   AvailabilityStatus,
 } from '../../shared/interfaces/adapter.types.js';
 
+/** Adapters can't value-import from shared (it isn't mounted in the worker
+ *  container — only adapters/ is). Signal "session expired" via a plain Error
+ *  with a distinctive name; the runtime detects it by `err.name` rather than
+ *  instanceof, so zero runtime deps on the shared directory are required. */
+function authRequired(message: string): Error {
+  const err = new Error(message);
+  err.name = 'AuthRequiredError';
+  return err;
+}
+
 const BASE_URL = 'https://speeddial.worldpac.com';
 const LOGIN_URL = `${BASE_URL}/#/login`;
 const HOME_URL = `${BASE_URL}/#/`;
@@ -154,6 +164,7 @@ const adapter: PartSearchAdapter = {
     maxRPS: 1,
     searchByVIN: false,
     searchByCross: false,
+    supportsPersistentSession: true,
   },
 
   async initialize(ctx: ExecutionContext): Promise<void> {
@@ -237,11 +248,13 @@ const adapter: PartSearchAdapter = {
     }
     const page = pageOf(ctx);
 
-    // If we somehow landed back on login (session expired), re-authenticate.
+    // If we somehow landed back on login, the session has expired. Signal this
+    // to the runtime — for persistent-session sites it will dispose the cached
+    // session and retry once with a fresh login; for per-request sites the job
+    // fails with an 'auth' error and the next job re-authenticates from scratch.
     const onLogin = await page.evaluate(() => location.hash.startsWith('#/login')).catch(() => true);
     if (onLogin) {
-      if (!adapter.authenticate) throw new Error('authenticate not defined');
-      await adapter.authenticate(ctx);
+      throw authRequired('worldpac-speeddial: session expired (landed on /#/login)');
     }
 
     // Ensure the search bar is mounted (home shell or any authenticated route).

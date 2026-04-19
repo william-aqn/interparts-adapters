@@ -64,7 +64,11 @@ import type { PartSearchAdapter } from '../../shared/interfaces/adapter.types.js
 const adapter: PartSearchAdapter = {
   adapterId: 'example',
   adapterName: 'Example Parts Store',
-  capabilities: { mode: 'http', needsAuth: false, supportsBulkSearch: false, maxRPS: 3, searchByVIN: false, searchByCross: false },
+  capabilities: {
+    mode: 'http', needsAuth: false, supportsBulkSearch: false,
+    maxRPS: 3, searchByVIN: false, searchByCross: false,
+    // supportsPersistentSession?: true — opt into keep-alive auth (see below)
+  },
 
   async initialize(ctx) { /* one-time setup: login, cookie fetch */ },
   async search(ctx, query) { /* returns PartResult[] */ },
@@ -73,6 +77,12 @@ const adapter: PartSearchAdapter = {
 
 export default adapter;
 ```
+
+**Imports from `shared/` MUST be type-only.** The worker container mounts
+only `adapters/` at `/app/adapters` — `shared/` is not available at runtime.
+`import type { ... }` is erased by TS; `import { ClassName, ... }` would fail
+at Node's dynamic-import step. This is why `AuthRequiredError` (below) is
+signalled by `name`, not `instanceof`.
 
 ### Three modes
 
@@ -102,6 +112,38 @@ export default adapter;
 Optional: `quantity`, `deliveryDays`, `deliveryCity`, `warehouse`, `sourceUrl`, `imageUrl`, `crossNumbers`.
 
 **Never fabricate data** — if a field is unavailable on the page, leave it `undefined`.
+
+### Persistent session (optional — opt in via capability)
+
+For adapters where the login step is expensive (SPA auth, multi-step OAuth), the
+runtime can hold the authenticated session across jobs. Participation is
+explicit:
+
+1. Set `capabilities.supportsPersistentSession: true`.
+2. Ensure `initialize()` / `authenticate()` are **idempotent** (safe to call on
+   fresh state even though the runtime only calls them once per session).
+3. When `search()` detects that the server expired the session (redirect to
+   login, 401/403, etc.) **throw a plain Error tagged with `name = 'AuthRequiredError'`.**
+   The runtime disposes the cached session and retries the call once with a
+   fresh auth. Do **not** inline-re-login from `search()` anymore — that made
+   retry semantics unclear and is now the runtime's job.
+
+```typescript
+function authRequired(msg: string): Error {
+  const e = new Error(msg); e.name = 'AuthRequiredError'; return e;
+}
+
+async search(ctx, q) {
+  // ...detect login-wall...
+  if (onLogin) throw authRequired('session expired');
+  // normal flow
+}
+```
+
+Whether a given Site actually uses persistent mode is decided per-installation
+on the Site record (`persistentSession: boolean`) — see
+`interparts-info/README.md §5.4-bis`. A site without the flag still works with
+a persistent-capable adapter; it just pays full auth per job.
 
 ## Security rules (CRITICAL)
 

@@ -25,6 +25,30 @@ describe('worldpac-speeddial adapter', () => {
     expect(adapter.authenticate).toBeTypeOf('function');
   });
 
+  it('opts into persistent-session mode', () => {
+    expect(adapter.capabilities.supportsPersistentSession).toBe(true);
+  });
+
+  it('search() signals AuthRequiredError when the SPA lands on /#/login', async () => {
+    // Fake page stub — enough for search() to reach the onLogin branch before
+    // needing a real #searchTerm. `evaluate` returns true for the login-hash
+    // probe, after which search() should throw AuthRequiredError.
+    const ctx = createTestContext();
+    const fakePage = {
+      async evaluate<R>(fn: () => R): Promise<R> {
+        const src = fn.toString();
+        if (src.includes("location.hash.startsWith('#/login')")) {
+          return true as unknown as R;
+        }
+        throw new Error('unexpected page.evaluate call: ' + src);
+      },
+    };
+    const ctxWithPage = { ...ctx, page: fakePage } as unknown as Parameters<typeof adapter.search>[0];
+    await expect(adapter.search(ctxWithPage, { partNumber: 'BLBH11' })).rejects.toMatchObject({
+      name: 'AuthRequiredError',
+    });
+  });
+
   it('search() throws when ExecutionContext.page is missing', async () => {
     const ctx = createTestContext();
     await adapter.initialize(ctx);
