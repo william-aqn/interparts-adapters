@@ -164,7 +164,14 @@ const adapter: PartSearchAdapter = {
     maxRPS: 1,
     searchByVIN: false,
     searchByCross: false,
-    supportsPersistentSession: true,
+    // NOTE: speedDIAL 2.0 aggressively rehydrates the previous /#/pna view
+    // from localStorage (wp-search-response-part/product) on every page load.
+    // In persistent-session mode the dedicated BrowserContext's localStorage
+    // survives across jobs, so the SPA serves the previous query's DOM while
+    // the new fetch is still in flight — scraped results end up off-by-one.
+    // Clearing those cache keys breaks the auth state (shared storage).
+    // Leaving as false so operators can't silently enable the buggy mode.
+    supportsPersistentSession: false,
   },
 
   async initialize(ctx: ExecutionContext): Promise<void> {
@@ -248,10 +255,7 @@ const adapter: PartSearchAdapter = {
     }
     const page = pageOf(ctx);
 
-    // If we somehow landed back on login, the session has expired. Signal this
-    // to the runtime — for persistent-session sites it will dispose the cached
-    // session and retry once with a fresh login; for per-request sites the job
-    // fails with an 'auth' error and the next job re-authenticates from scratch.
+    // If we somehow landed on login, session expired. Signal to runtime.
     const onLogin = await page.evaluate(() => location.hash.startsWith('#/login')).catch(() => true);
     if (onLogin) {
       throw authRequired('worldpac-speeddial: session expired (landed on /#/login)');
