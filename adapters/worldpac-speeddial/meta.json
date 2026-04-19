@@ -26,7 +26,7 @@
       "priceRow": ".product-quote .name-value-row",
       "availabilityLabel": ".product-quote .item-availability"
     },
-    "knownIssues": "Pre-filled username on first load (browser autofill). Always overwrite via native setter + input/change events so React state updates. Login failures surface as a div containing 'Failed to sign in' — no role=alert. Session cookie is set on worldpac.com domain via Cloudflare.",
-    "apiNotes": "Internal REST (not public) at '/sdpro/servlet/servlet.loginwidgetcontroller' (auth) and similar endpoints; DOM scraping is the supported path. WCAP API exists but needs a separate API token issued from Settings → API Tokens."
+    "knownIssues": "Pre-filled username on first load (browser autofill). Always overwrite via native setter + input/change events so React state updates. Login failures surface as a div containing 'Failed to sign in' — no role=alert. Session cookie is set on worldpac.com domain via Cloudflare. Product-detail route ('#/product-detail') is driven by React state — clicking '.product-detail-link' navigates but does NOT put the product id in the URL, so there is no shareable per-product link; sourceUrl on every PartResult stays '/#/pna' and the internal productCode is exposed via raw.productCode / raw.productDetailsApi.",
+    "apiNotes": "Internal REST (authenticated via the session cookie, not public): POST '/sdpro/servlet/servlet.loginwidgetcontroller?type=login' (login, host worldpac.my.site.com), POST '/v3/pna360' (search), GET '/v3/productdetails?productCode=<partNumber padded to 18 with spaces><brandCode>' (e.g. 'H11.BX            OSR'), GET '/v3/buyersguide/?productCode=...&searchOptions=AM,OE', POST '/v3/digitalassets' (images). Brand code is parsed from the logo URL path: 'img.wp-static.com/brands/<CODE>.gif'. WCAP API is the public path but needs an API token issued from Settings → API Tokens (not used here)."
   }
 }

@@ -133,7 +133,20 @@ Workers читают адаптеры из bind mount:
 ```
 /opt/interparts-adapters/adapters:/app/adapters:ro
 ```
-Push в этот репо → GitHub Action → `git pull` на сервере → workers подхватывают через `fs.watch` (hot-swap).
+Push в этот репо → GitHub Action → `git pull` на сервере → workers подхватывают через `fs.watch` + Redis pub/sub (см. ниже).
+
+## Горячая перезагрузка
+
+Адаптер загружается в память воркера при первом использовании и кэшируется по `adapterId`. Сброс кэша → следующий search/health-job перечитает файл с диска.
+
+| Как меняется адаптер | Нужен ли ручной рестарт |
+|---|---|
+| Правка кода/промпта через админку (Code tab → Save, Prompt tab → Save, Settings → Save) | **Нет.** Orchestrator публикует `interparts:adapter:reloaded` по Redis; воркеры делают `AdapterLoader.invalidate(adapterId)`. |
+| AI Pipeline (Generate / Fix) | **Нет.** GitDeployer пишет `adapter.ts` + `meta.json` с новой `version`; следующий импорт идёт по новому cache-busting URL. |
+| Правка файлов **на хосте** (git pull, ручное редактирование) | На Linux — обычно `fs.watch` поймает. На **Docker Desktop (Windows/Mac)** inotify через bind-mount ненадёжен → нажми **«Force reload»** на странице адаптера (`/adapters/<adapterId>` в админке) либо `POST /api/adapters/<adapterId>/reload`. Альтернативы: `docker compose restart worker-<mode>-default` или `docker exec <worker> touch /app/adapters/<adapterId>/meta.json`. |
+| Меняется `shared/interfaces/adapter.types.ts` | Только компилятор — для адаптеров это compile-time контракт, не runtime-зависимость. Но не забудь синхронизировать копию в `interparts-core` (см. выше). |
+
+**Force reload** (`POST /api/adapters/:id/reload`) шлёт сигнал всем воркерам разом; сам адаптер-код остаётся на диске в неизменном виде и перечитается при следующем job. Никакого `docker restart` не нужно.
 
 ## Лицензия
 

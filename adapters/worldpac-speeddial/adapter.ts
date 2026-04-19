@@ -72,6 +72,11 @@ function setReactValue(el: HTMLInputElement, val: string): void {
 
 interface ScrapedQuote {
   brand: string | null;
+  /** Brand code parsed from the brand-logo URL (e.g. "OSR" for Sylvania,
+   *  "PROT9" for ProTune). Used together with partNumber to build
+   *  speedDIAL's internal productCode (`<partNumber padded to 18>><brandCode>`)
+   *  that /v3/productdetails accepts. */
+  brandCode: string | null;
   name: string | null;
   partNumber: string | null;
   priceText: string | null;
@@ -82,6 +87,17 @@ interface ScrapedQuote {
   warehouse: string | null;
   deliveryText: string | null;
   imageUrl: string | null;
+}
+
+/** Pad a part number to speedDIAL's 18-char fixed-width field with trailing
+ *  spaces, then concatenate the brand code. Mirrors the `productCode` param
+ *  observed on /v3/productdetails?productCode=H11.BX<14 spaces>OSR. */
+function buildProductCode(partNumber: string, brandCode: string): string {
+  const PAD = 18;
+  const padded = partNumber.length >= PAD
+    ? partNumber.slice(0, PAD)
+    : partNumber + ' '.repeat(PAD - partNumber.length);
+  return padded + brandCode;
 }
 
 // ─── Parsing helpers (run in Node) ───────────────────────────────────────
@@ -337,6 +353,10 @@ const adapter: PartSearchAdapter = {
       return quotes.map((q) => {
         const brandImg = q.querySelector('img.sd-brand-image') as HTMLImageElement | null;
         const brand = brandImg?.alt || brandImg?.title || null;
+        // brandCode from logo URL: /brands/OSR.gif → "OSR", /brands/PROT9.gif → "PROT9"
+        const brandSrc = brandImg?.currentSrc || brandImg?.src || '';
+        const brandCodeMatch = brandSrc.match(/\/brands\/([^./]+)\.[a-z]+$/i);
+        const brandCode = brandCodeMatch?.[1] ?? null;
         // Prefer the real product photo (sd-part-image) over the brand logo
         // (sd-brand-image). Some rows only have the brand logo — fall back
         // then. `.src` from the DOM API is always absolute; currentSrc
@@ -388,6 +408,7 @@ const adapter: PartSearchAdapter = {
 
         return {
           brand,
+          brandCode,
           name,
           partNumber,
           priceText,
@@ -403,7 +424,12 @@ const adapter: PartSearchAdapter = {
     });
 
     const now = new Date();
-    const sourceUrl = page.url();
+    // The product-detail route (#/product-detail) is driven by React state,
+    // not URL params — there's no shareable per-product link in the UI. We
+    // fall back to the list URL for human navigation, and expose the internal
+    // API URL in `raw.productDetailsApi` for machine consumers that can reuse
+    // the authenticated session.
+    const listUrl = page.url();
 
     const results: PartResult[] = [];
     for (const r of scraped) {
@@ -413,6 +439,17 @@ const adapter: PartSearchAdapter = {
       const availability = mapAvailability(r.availabilityLabel, r.availabilityClass, qty);
       const deliveryDays = parseDeliveryDays(r.deliveryText);
 
+      const productCode = r.brandCode ? buildProductCode(r.partNumber, r.brandCode) : null;
+      const productDetailsApi = productCode
+        ? `${BASE_URL}/v3/productdetails?productCode=${encodeURIComponent(productCode)}`
+        : null;
+
+      const raw: Record<string, unknown> = {};
+      if (r.brandCode) raw['brandCode'] = r.brandCode;
+      if (productCode) raw['productCode'] = productCode;
+      if (productDetailsApi) raw['productDetailsApi'] = productDetailsApi;
+      if (r.availabilityTitle) raw['availabilityTitle'] = r.availabilityTitle;
+
       const out: PartResult = {
         partNumber: r.partNumber,
         brand: r.brand ?? 'unknown',
@@ -421,13 +458,14 @@ const adapter: PartSearchAdapter = {
         currency: 'USD',
         availability,
         source: ctx.siteId,
-        sourceUrl,
+        sourceUrl: listUrl,
         updatedAt: now,
       };
       if (qty !== undefined) out.quantity = qty;
       if (r.warehouse) out.warehouse = r.warehouse;
       if (deliveryDays !== undefined) out.deliveryDays = deliveryDays;
       if (r.imageUrl) out.imageUrl = r.imageUrl;
+      if (Object.keys(raw).length > 0) out.raw = raw;
       results.push(out);
     }
 
