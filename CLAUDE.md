@@ -19,10 +19,10 @@ Two sibling repositories (must share the same parent directory):
 ```
 interparts-adapters/
   adapters/
-    <siteId>/
+    <adapterId>/          # directory = the adapter's logical id
       adapter.ts          # PartSearchAdapter implementation
       adapter.test.ts     # E2E test (real HTTP, vitest)
-      meta.json           # site config (url, mode, limits, prompt hints)
+      meta.json           # adapter config (url, mode, limits, prompt hints)
     demo-http/            # always-present demo adapter (dummyjson.com)
     demo-api/             # API-mode demo
     demo-browser/         # Browser-mode demo
@@ -37,6 +37,13 @@ interparts-adapters/
   package.json            # @interparts/adapters, Node >=22, vitest, cheerio
   tsconfig.json           # strict, noUncheckedIndexedAccess, ES2022, NodeNext
 ```
+
+**Adapter vs Site (core concept).** Adapters are first-class entities — reusable
+code packages that talk to one supplier. Sites are per-installation records: they
+each pick one adapter and supply their own credentials, proxy, and
+`healthCheckQuery`. Many sites can share the same adapter (e.g. multiple
+customer accounts on one supplier). The adapter's code uses `ctx.siteId` to
+populate `PartResult.source`, not the adapter's own id.
 
 ## Tech stack
 
@@ -55,8 +62,8 @@ Every adapter default-exports an object satisfying `PartSearchAdapter` from
 import type { PartSearchAdapter } from '../../shared/interfaces/adapter.types.js';
 
 const adapter: PartSearchAdapter = {
-  siteId: 'example',
-  siteName: 'Example Parts Store',
+  adapterId: 'example',
+  adapterName: 'Example Parts Store',
   capabilities: { mode: 'http', needsAuth: false, supportsBulkSearch: false, maxRPS: 3, searchByVIN: false, searchByCross: false },
 
   async initialize(ctx) { /* one-time setup: login, cookie fetch */ },
@@ -87,7 +94,7 @@ export default adapter;
   price: number;          // parsed as number, NOT string
   currency: string;       // ISO 4217: RUB, USD, EUR, KZT
   availability: 'in_stock' | 'on_order' | 'out_of_stock' | 'unknown';
-  source: string;         // MUST equal siteId from meta.json
+  source: string;         // MUST equal ctx.siteId (the calling site, not the adapter)
   updatedAt: Date;        // new Date()
 }
 ```
@@ -115,19 +122,16 @@ Violations cause immediate rejection.
 
 ```json
 {
-  "siteId": "example",
-  "siteName": "Example Parts Store",
+  "adapterId": "example",
+  "name": "Example Parts Store",
   "url": "https://example.com",
   "mode": "http",
   "needsAuth": false,
-  "credentialsRef": null,
   "maxRPS": 3,
-  "proxy": { "enabled": false, "poolId": null, "overrideUrl": null },
   "timeout": 15000,
   "retries": 2,
   "tags": ["ru", "commercial"],
   "version": 1,
-  "healthCheckQuery": "1K0615301AA",
   "prompt": {
     "customInstructions": null,
     "selectorHints": {},
@@ -136,6 +140,9 @@ Violations cause immediate rejection.
   }
 }
 ```
+
+Per-site settings (credentials, proxy pool, healthCheckQuery, status, health)
+live on the Site record in Mongo — never in meta.json.
 
 See spec section 4 for the full schema.
 
@@ -146,24 +153,27 @@ Each adapter must have `adapter.test.ts`:
 ```typescript
 import { describe, it, expect } from 'vitest';
 import adapter from './adapter.js';
-import { createTestContext } from '../../shared/test-helpers/context.js';
+import { createTestContext } from '../../shared/test-helpers/e2e-runner.js';
 import meta from './meta.json' with { type: 'json' };
 
-describe(meta.siteId, () => {
-  it('returns at least 1 result for the health-check query', async () => {
-    const ctx = createTestContext(meta);
+describe(meta.adapterId, () => {
+  it('returns at least 1 result for a sample query', async () => {
+    const ctx = createTestContext({ siteId: meta.adapterId });
     await adapter.initialize(ctx);
-    const results = await adapter.search(ctx, { partNumber: meta.healthCheckQuery });
-    expect(results.length).toBeGreaterThanOrEqual(1);
+    const results = await adapter.search(ctx, { partNumber: 'TEST' });
+    expect(Array.isArray(results)).toBe(true);
     for (const r of results) {
       expect(r.partNumber).toBeTruthy();
       expect(r.brand).toBeTruthy();
       expect(typeof r.price).toBe('number');
-      expect(r.source).toBe(meta.siteId);
+      expect(r.source).toBe(meta.adapterId);
     }
   });
 });
 ```
+
+The real `healthCheckQuery` lives on the Site record (per installation) — the
+in-tree test uses whatever sample query makes sense for the adapter.
 
 ## AI Pipeline flow (automated adapter generation)
 
@@ -174,15 +184,15 @@ When the AI Pipeline service in `interparts-core` processes a generate/fix job:
 3. Calls Claude API (sonnet) with sanitized HTML (spec section 19 — prompt injection defense)
 4. Extracts TypeScript from Claude's response
 5. Validates: `tsc --noEmit` → `CodeValidator` (security scan) → E2E test run
-6. On success: `git add adapters/<siteId>/ && git commit && git push`
+6. On success: `git add adapters/<adapterId>/ && git commit && git push`
 7. Workers on the server detect changes via `fs.watch` → hot-swap adapter
 
 The prompt templates use Mustache-style `{{VARIABLE}}` placeholders filled by the pipeline.
 
 ## Git conventions
 
-- **Commits by AI Pipeline**: `feat(<siteId>): auto-generated adapter v<N>` or `fix(<siteId>): auto-fixed adapter v<N>`
-- **Manual commits**: conventional format — `feat(<siteId>): ...`, `fix(<siteId>): ...`
+- **Commits by AI Pipeline**: `feat(<adapterId>): auto-generated adapter v<N>` or `fix(<adapterId>): auto-fixed adapter v<N>`
+- **Manual commits**: conventional format — `feat(<adapterId>): ...`, `fix(<adapterId>): ...`
 - Many AI-generated test adapters (`aigene2e*`) accumulate from E2E test runs — these are harmless and can be cleaned up periodically
 
 ## adapter.types.ts sync

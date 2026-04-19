@@ -60,8 +60,8 @@ async function fetchJson(
 }
 
 const adapter: PartSearchAdapter = {
-  siteId: 'demo-api',
-  siteName: 'Demo API (httpbin.org)',
+  adapterId: 'demo-api',
+  adapterName: 'Demo API (httpbin.org)',
 
   capabilities: {
     mode: 'api',
@@ -102,7 +102,7 @@ const adapter: PartSearchAdapter = {
       currency: 'USD',
       availability: 'in_stock',
       quantity: Math.max(1, (slide.items?.length ?? 0)),
-      source: 'demo-api',
+      source: ctx.siteId,
       sourceUrl: `${BASE_URL}${JSON_ENDPOINT}`,
       updatedAt: now,
       raw: { slide, slideIndex: idx },

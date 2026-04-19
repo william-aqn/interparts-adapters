@@ -30,11 +30,12 @@ const testLogger: Logger = {
   debug: (msg, ...args) => console.debug(`[adapter:debug] ${msg}`, ...args),
 };
 
-export function createTestContext(overrides?: Partial<ExecutionContext>): ExecutionContext {
+export function createTestContext(overrides?: Partial<ExecutionContext> & { siteId?: string }): ExecutionContext {
   const base: ExecutionContext = {
     fetch: globalThis.fetch,
     cookies: new NullCookieJar(),
     logger: testLogger,
+    siteId: overrides?.siteId ?? 'test-site',
   };
   return { ...base, ...overrides };
 }
@@ -51,7 +52,7 @@ export async function runAdapterSearch(
   query: PartQuery,
   opts: AdapterTestOptions = {},
 ): Promise<PartResult[]> {
-  const ctx = createTestContext();
+  const ctx = createTestContext({ siteId: adapter.adapterId });
   await adapter.initialize(ctx);
   if (adapter.capabilities.needsAuth && adapter.authenticate) {
     await adapter.authenticate(ctx);

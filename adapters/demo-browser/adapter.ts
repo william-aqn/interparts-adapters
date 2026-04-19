@@ -40,8 +40,8 @@ function pageAsPlaywright(ctx: ExecutionContext): PlaywrightPageLike {
 }
 
 const adapter: PartSearchAdapter = {
-  siteId: 'demo-browser',
-  siteName: 'Demo Browser (quotes.toscrape.com)',
+  adapterId: 'demo-browser',
+  adapterName: 'Demo Browser (quotes.toscrape.com)',
 
   capabilities: {
     mode: 'browser',
@@ -92,7 +92,7 @@ const adapter: PartSearchAdapter = {
         currency: 'USD',
         availability: 'in_stock',
         quantity: tags.length,
-        source: 'demo-browser',
+        source: ctx.siteId,
         sourceUrl: page.url(),
         updatedAt: now,
         raw: { tags },

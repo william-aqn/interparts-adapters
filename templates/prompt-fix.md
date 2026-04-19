@@ -1,7 +1,7 @@
 Ты — система автолечения адаптеров Inter Parts.
 
 ## Контекст
-Адаптер `{{SITE_ID}}` (mode: {{SITE_MODE}}) сломался.
+Адаптер `{{ADAPTER_ID}}` (mode: {{ADAPTER_MODE}}) сломался.
 
 ## Текущий код адаптера
 ```typescript

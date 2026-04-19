@@ -1,23 +1,16 @@
 {
-  "siteId": "worldpac-speeddial",
-  "siteName": "Worldpac speedDIAL 2.0",
+  "adapterId": "worldpac-speeddial",
+  "name": "Worldpac speedDIAL 2.0",
   "url": "https://speeddial.worldpac.com",
   "mode": "browser",
   "needsAuth": true,
-  "credentialsRef": "worldpac-speeddial",
   "maxRPS": 1,
-  "proxy": {
-    "enabled": false,
-    "poolId": null,
-    "overrideUrl": null
-  },
   "timeout": 60000,
   "retries": 1,
   "tags": ["us", "commercial", "auth", "browser"],
   "version": 1,
   "lastModified": "2026-04-19T00:00:00Z",
-  "lastModifiedBy": "manual",
-  "healthCheckQuery": "BLBH11",
+  "lastModifiedBy": "migration",
   "prompt": {
     "customInstructions": "speedDIAL 2.0 is a React SPA. Login at '/#/login' with Material-UI inputs #username and #password, then submit via button[type=submit]. After login the URL settles on '/#/' (home). Search: fill '#searchTerm' (on home or any page) and press Enter; the app routes to '/#/pna' (Price & Availability) and renders '.product-quote' cards. Authentication posts to 'https://worldpac.my.site.com/sdpro/servlet/servlet.loginwidgetcontroller?type=login' behind the scenes; the adapter lets the SPA drive that.",
     "selectorHints": {

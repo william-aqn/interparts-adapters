@@ -18,8 +18,8 @@ const skipOnline = process.env['SKIP_ONLINE'] === '1';
 
 describe('worldpac-speeddial adapter', () => {
   it('declares matching metadata', () => {
-    expect(adapter.siteId).toBe('worldpac-speeddial');
-    expect(adapter.siteId).toBe(meta.siteId);
+    expect(adapter.adapterId).toBe('worldpac-speeddial');
+    expect(adapter.adapterId).toBe(meta.adapterId);
     expect(adapter.capabilities.mode).toBe('browser');
     expect(adapter.capabilities.needsAuth).toBe(true);
     expect(adapter.authenticate).toBeTypeOf('function');

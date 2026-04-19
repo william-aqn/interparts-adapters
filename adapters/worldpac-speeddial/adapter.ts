@@ -127,8 +127,8 @@ function parseDeliveryDays(text: string | null | undefined): number | undefined 
 // ─── Adapter ─────────────────────────────────────────────────────────────
 
 const adapter: PartSearchAdapter = {
-  siteId: 'worldpac-speeddial',
-  siteName: 'Worldpac speedDIAL 2.0',
+  adapterId: 'worldpac-speeddial',
+  adapterName: 'Worldpac speedDIAL 2.0',
 
   capabilities: {
     mode: 'browser',
@@ -372,7 +372,7 @@ const adapter: PartSearchAdapter = {
         price,
         currency: 'USD',
         availability,
-        source: 'worldpac-speeddial',
+        source: ctx.siteId,
         sourceUrl,
         updatedAt: now,
       };

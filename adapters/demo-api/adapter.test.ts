@@ -12,8 +12,8 @@ const skipOnline = process.env['SKIP_ONLINE'] === '1';
 
 describe('demo-api adapter', () => {
   it('declares matching metadata', () => {
-    expect(adapter.siteId).toBe('demo-api');
-    expect(adapter.siteId).toBe(meta.siteId);
+    expect(adapter.adapterId).toBe('demo-api');
+    expect(adapter.adapterId).toBe(meta.adapterId);
     expect(adapter.capabilities.mode).toBe('api');
     expect(adapter.capabilities.needsAuth).toBe(false);
   });
@@ -24,7 +24,7 @@ describe('demo-api adapter', () => {
       { partNumber: meta.healthCheckQuery, limit: 5 },
       {
         validate: (r: PartResult) => {
-          expect(r.source).toBe('demo-api');
+          expect(r.source).toBe(adapter.adapterId);
           expect(r.currency).toBe('USD');
           expect(r.availability).toBe('in_stock');
           expect(typeof r.price).toBe('number');

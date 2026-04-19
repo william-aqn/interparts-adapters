@@ -18,8 +18,8 @@ function mapAvailability(stock: number | undefined): AvailabilityStatus {
 }
 
 const adapter: PartSearchAdapter = {
-  siteId: 'STUB',
-  siteName: 'Stub Adapter (CLAUDE_DISABLED)',
+  adapterId: 'phase5-ui-test',
+  adapterName: 'Phase 5 UI Test',
   capabilities: {
     mode: 'http',
     needsAuth: false,
@@ -61,7 +61,7 @@ const adapter: PartSearchAdapter = {
         currency: 'USD',
         availability: mapAvailability(p.stock),
         ...(p.stock !== undefined ? { quantity: p.stock } : {}),
-        source: 'STUB',
+        source: ctx.siteId,
         sourceUrl: BASE_URL + '/products/' + p.id,
         updatedAt: now,
       }));

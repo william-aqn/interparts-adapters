@@ -1,23 +1,16 @@
 {
-  "siteId": "demo-api",
-  "siteName": "Demo API (httpbin.org)",
+  "adapterId": "demo-api",
+  "name": "Demo API (httpbin.org)",
   "url": "https://httpbin.org",
   "mode": "api",
   "needsAuth": false,
-  "credentialsRef": null,
   "maxRPS": 5,
-  "proxy": {
-    "enabled": false,
-    "poolId": null,
-    "overrideUrl": null
-  },
   "timeout": 8000,
   "retries": 1,
   "tags": ["demo", "test", "api"],
   "version": 1,
-  "lastModified": "2026-04-13T00:00:00Z",
-  "lastModifiedBy": "manual",
-  "healthCheckQuery": "demo-part",
+  "lastModified": "2026-04-19T00:00:00Z",
+  "lastModifiedBy": "migration",
   "prompt": {
     "customInstructions": "httpbin.org is an HTTP testbed — we use GET /json which returns a fixed JSON document, then synthesize PartResult[] entries from its fields. Exists purely to demonstrate the api mode runtime wiring.",
     "selectorHints": {},

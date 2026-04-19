@@ -1,23 +1,16 @@
 {
-  "siteId": "demo-browser",
-  "siteName": "Demo Browser (quotes.toscrape.com)",
+  "adapterId": "demo-browser",
+  "name": "Demo Browser (quotes.toscrape.com)",
   "url": "https://quotes.toscrape.com",
   "mode": "browser",
   "needsAuth": false,
-  "credentialsRef": null,
   "maxRPS": 2,
-  "proxy": {
-    "enabled": false,
-    "poolId": null,
-    "overrideUrl": null
-  },
   "timeout": 30000,
   "retries": 1,
   "tags": ["demo", "test", "browser"],
   "version": 1,
-  "lastModified": "2026-04-13T00:00:00Z",
-  "lastModifiedBy": "manual",
-  "healthCheckQuery": "love",
+  "lastModified": "2026-04-19T00:00:00Z",
+  "lastModifiedBy": "migration",
   "prompt": {
     "customInstructions": "quotes.toscrape.com is a stable Playwright playground. We navigate to the search-by-tag URL and extract quote blocks.",
     "selectorHints": {

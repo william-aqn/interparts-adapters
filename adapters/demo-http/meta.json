@@ -1,16 +1,10 @@
 {
-  "siteId": "demo-http",
-  "siteName": "Demo HTTP (dummyjson.com)",
+  "adapterId": "demo-http",
+  "name": "Demo HTTP (dummyjson.com)",
   "url": "https://dummyjson.com",
   "mode": "http",
   "needsAuth": false,
-  "credentialsRef": null,
   "maxRPS": 5,
-  "proxy": {
-    "enabled": false,
-    "poolId": null,
-    "overrideUrl": null
-  },
   "timeout": 10000,
   "retries": 1,
   "tags": [
@@ -18,9 +12,8 @@
     "test"
   ],
   "version": 1,
-  "lastModified": "2026-04-14T06:15:25.315Z",
-  "lastModifiedBy": "ai-pipeline",
-  "healthCheckQuery": "phone",
+  "lastModified": "2026-04-19T00:00:00Z",
+  "lastModifiedBy": "migration",
   "prompt": {
     "customInstructions": "dummyjson.com provides a stable public JSON test API. Use GET /products/search?q=<query> — returns { products: [...] }. No HTML parsing needed despite mode:http.",
     "selectorHints": {},

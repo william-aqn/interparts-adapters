@@ -16,8 +16,8 @@ const skipOnline = process.env['SKIP_ONLINE'] === '1';
 
 describe('demo-browser adapter', () => {
   it('declares matching metadata', () => {
-    expect(adapter.siteId).toBe('demo-browser');
-    expect(adapter.siteId).toBe(meta.siteId);
+    expect(adapter.adapterId).toBe('demo-browser');
+    expect(adapter.adapterId).toBe(meta.adapterId);
     expect(adapter.capabilities.mode).toBe('browser');
     expect(adapter.capabilities.needsAuth).toBe(false);
   });

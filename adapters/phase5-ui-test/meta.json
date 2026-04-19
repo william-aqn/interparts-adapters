@@ -1,23 +1,18 @@
 {
-  "siteName": "Phase 5 UI Test",
+  "adapterId": "phase5-ui-test",
+  "name": "Phase 5 UI Test",
+  "url": "https://dummyjson.com",
+  "mode": "http",
+  "needsAuth": false,
+  "maxRPS": 3,
+  "timeout": 10000,
+  "retries": 1,
   "tags": [
     "test",
     "phase5"
   ],
-  "credentialsRef": null,
-  "maxRPS": 3,
-  "retries": 1,
-  "healthCheckQuery": "phone",
-  "mode": "http",
-  "timeout": 10000,
   "version": 1,
-  "prompt": {},
-  "siteId": "phase5-ui-test",
-  "url": "https://dummyjson.com",
-  "needsAuth": false,
-  "proxy": {
-    "enabled": false
-  },
-  "lastModified": "2026-04-13T11:15:56.176Z",
-  "lastModifiedBy": "ai-pipeline"
+  "lastModified": "2026-04-19T00:00:00Z",
+  "lastModifiedBy": "migration",
+  "prompt": {}
 }

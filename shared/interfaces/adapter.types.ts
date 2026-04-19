@@ -133,8 +133,12 @@ export interface ExecutionContext {
   fetch: typeof globalThis.fetch;
   cookies: CookieJar;
   logger: Logger;
-  /** Credentials (only present when meta.needsAuth). */
+  /** Credentials (only present when the adapter declares needsAuth and the site provides them). */
   credentials?: SiteCredentials;
+
+  /** Logical site id. Adapters MUST use this value for PartResult.source so
+   *  the same adapter code can back multiple sites. */
+  siteId: string;
 
   /** mode = 'http' | 'browser': returns Cheerio loader for HTML strings. */
   parseHtml?: (html: string) => CheerioAPI;
@@ -147,8 +151,9 @@ export interface ExecutionContext {
 
 // ─── The main interface ─────────────────────────────────────
 export interface PartSearchAdapter {
-  readonly siteId: string;
-  readonly siteName: string;
+  /** Adapter package identity — matches the on-disk directory name. */
+  readonly adapterId: string;
+  readonly adapterName: string;
   readonly capabilities: AdapterCapabilities;
 
   /** One-time setup (warm caches, compile regexes, load statics). */
