@@ -1,0 +1,38 @@
+{
+  "siteId": "worldpac-speeddial",
+  "siteName": "Worldpac speedDIAL 2.0",
+  "url": "https://speeddial.worldpac.com",
+  "mode": "browser",
+  "needsAuth": true,
+  "credentialsRef": "worldpac-speeddial",
+  "maxRPS": 1,
+  "proxy": {
+    "enabled": false,
+    "poolId": null,
+    "overrideUrl": null
+  },
+  "timeout": 60000,
+  "retries": 1,
+  "tags": ["us", "commercial", "auth", "browser"],
+  "version": 1,
+  "lastModified": "2026-04-19T00:00:00Z",
+  "lastModifiedBy": "manual",
+  "healthCheckQuery": "BLBH11",
+  "prompt": {
+    "customInstructions": "speedDIAL 2.0 is a React SPA. Login at '/#/login' with Material-UI inputs #username and #password, then submit via button[type=submit]. After login the URL settles on '/#/' (home). Search: fill '#searchTerm' (on home or any page) and press Enter; the app routes to '/#/pna' (Price & Availability) and renders '.product-quote' cards. Authentication posts to 'https://worldpac.my.site.com/sdpro/servlet/servlet.loginwidgetcontroller?type=login' behind the scenes; the adapter lets the SPA drive that.",
+    "selectorHints": {
+      "loginUser": "#username",
+      "loginPass": "#password",
+      "loginSubmit": "form[data-testid=\"login-form\"] button[type=\"submit\"]",
+      "searchInput": "#searchTerm",
+      "resultRow": ".product-quote",
+      "brandImg": ".product-quote img.sd-brand-image",
+      "descriptionTitle": ".product-quote .product-description .bold-text",
+      "productId": ".product-quote .product-detail-link.product-id",
+      "priceRow": ".product-quote .name-value-row",
+      "availabilityLabel": ".product-quote .item-availability"
+    },
+    "knownIssues": "Pre-filled username on first load (browser autofill). Always overwrite via native setter + input/change events so React state updates. Login failures surface as a div containing 'Failed to sign in' — no role=alert. Session cookie is set on worldpac.com domain via Cloudflare.",
+    "apiNotes": "Internal REST (not public) at '/sdpro/servlet/servlet.loginwidgetcontroller' (auth) and similar endpoints; DOM scraping is the supported path. WCAP API exists but needs a separate API token issued from Settings → API Tokens."
+  }
+}

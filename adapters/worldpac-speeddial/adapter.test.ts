@@ -1,0 +1,47 @@
+/**
+ * worldpac-speeddial adapter tests.
+ *
+ * Like demo-browser, the full flow needs a live Playwright context, which
+ * lives in the worker containers. Locally we validate:
+ *   - metadata matches meta.json
+ *   - search() throws without ctx.page (browser-mode invariant)
+ *   - authenticate() throws without credentials
+ *   - healthCheck() hits the SPA shell via ctx.fetch
+ */
+
+import { describe, it, expect } from 'vitest';
+import adapter from './adapter.js';
+import meta from './meta.json' with { type: 'json' };
+import { createTestContext } from '../../shared/test-helpers/e2e-runner.js';
+
+const skipOnline = process.env['SKIP_ONLINE'] === '1';
+
+describe('worldpac-speeddial adapter', () => {
+  it('declares matching metadata', () => {
+    expect(adapter.siteId).toBe('worldpac-speeddial');
+    expect(adapter.siteId).toBe(meta.siteId);
+    expect(adapter.capabilities.mode).toBe('browser');
+    expect(adapter.capabilities.needsAuth).toBe(true);
+    expect(adapter.authenticate).toBeTypeOf('function');
+  });
+
+  it('search() throws when ExecutionContext.page is missing', async () => {
+    const ctx = createTestContext();
+    await adapter.initialize(ctx);
+    await expect(adapter.search(ctx, { partNumber: 'BLBH11' })).rejects.toThrow(/page missing/);
+  });
+
+  it('authenticate() rejects when credentials are missing', async () => {
+    const ctx = createTestContext(); // no credentials
+    await adapter.initialize(ctx);
+    await expect(adapter.authenticate!(ctx)).rejects.toThrow(/credentials/i);
+  });
+
+  it.skipIf(skipOnline)('healthCheck passes against the SPA shell', async () => {
+    const ctx = createTestContext();
+    const h = await adapter.healthCheck(ctx);
+    expect(typeof h.ok).toBe('boolean');
+    expect(h.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(h.checkedAt).toBeInstanceOf(Date);
+  }, 15_000);
+});
