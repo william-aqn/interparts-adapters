@@ -6,6 +6,12 @@
 
 > **Статус**: рабочий демо-адаптер (`demo-http` → dummyjson.com), AI Pipeline генерирует и чинит адаптеры автоматически через Claude API.
 
+> 📘 **Документация и Claude-конфиги живут в sibling-репе**:
+> - Карта проекта: [`../interparts-core/CLAUDE.md`](../interparts-core/CLAUDE.md)
+> - Контракт адаптера + security rules: [`../interparts-core/docs/adapters/`](../interparts-core/docs/adapters/)
+> - AI Pipeline flow + CodeValidator: [`../interparts-core/docs/ai-pipeline/`](../interparts-core/docs/ai-pipeline/)
+> - Саб-агенты для Claude: [`../interparts-core/.claude/agents/`](../interparts-core/.claude/agents/)
+
 ## Структура
 
 ```

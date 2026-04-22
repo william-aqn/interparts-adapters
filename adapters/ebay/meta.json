@@ -1,0 +1,32 @@
+{
+  "adapterId": "ebay",
+  "name": "eBay",
+  "url": "https://www.ebay.com",
+  "mode": "http",
+  "needsAuth": false,
+  "maxRPS": 2,
+  "timeout": 20000,
+  "retries": 2,
+  "tags": ["us", "marketplace", "retail"],
+  "version": 1,
+  "lastModified": "2026-04-22T00:00:00Z",
+  "lastModifiedBy": "manual",
+  "healthCheckQuery": "blbh11",
+  "prompt": {
+    "customInstructions": "eBay search: GET https://www.ebay.com/sch/i.html?_nkw=<query>. Server-rendered HTML; no JS/auth needed. Each result is a <li class=\"s-card\"> inside <ul class=\"srp-results\">. The response contains promo/placement cards with title \"Shop on eBay\" that MUST be filtered out. An .srp-save-null-search banner signals \"No exact matches found\" and any remaining cards are suggestions, not matches — return []. Card titles embed a hidden a11y span \"Opens in a new window or tab\" that should be stripped. Anchor hrefs are wrapped in tracking redirects; reconstruct a clean product URL from the <li data-listingid=\"...\"> attribute as https://www.ebay.com/itm/<listingId>.",
+    "selectorHints": {
+      "resultRow": "li.s-card",
+      "title": ".s-card__title",
+      "price": ".s-card__price",
+      "subtitleCondition": ".s-card__subtitle",
+      "imageThumb": "img",
+      "imageLazyAttr": "data-defer-load",
+      "listingIdAttr": "data-listingid",
+      "nullSearchBanner": ".srp-save-null-search",
+      "nullSearchHeading": ".srp-save-null-search__heading",
+      "attributeRow": ".s-card__attribute-row"
+    },
+    "knownIssues": "Bot wall: a plain Node/undici fetch without a real-browser User-Agent returns the \"Pardon Our Interruption\" splash (~13 KB, zero s-card elements). Always send a desktop-Chrome UA header (e.g. Mozilla/5.0 ... Chrome/131 Safari/537.36). Currency depends on visitor geolocation/cookie (USD by default for a cookieless US fetch); parse the rendered symbol (US $, AU $, C $, €, £, ¥, …) and map to ISO 4217. Prices can be ranges like \"$10.00 to $20.00\" — take the first numeric amount. Brand is not reliably extractable from the title; default to \"unknown\" and let downstream normalizers infer. The first 1-2 cards on most result pages are sponsored placements whose title is literally \"Shop on eBay\"; filter them by text, not by position.",
+    "apiNotes": "eBay has a real Browse API (api.ebay.com/buy/browse/v1) but it requires an OAuth client_credentials token. The scraped SRP endpoint is sufficient for price/title/image and matches the price shown on ebay.com; keep using GET /sch/i.html?_nkw= unless API credentials are wired into the adapter (meta.needsAuth=true)."
+  }
+}
