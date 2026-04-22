@@ -8,9 +8,9 @@
   "timeout": 60000,
   "retries": 1,
   "tags": ["us", "commercial", "auth", "browser"],
-  "version": 1,
-  "lastModified": "2026-04-19T00:00:00Z",
-  "lastModifiedBy": "migration",
+  "version": 5,
+  "lastModified": "2026-04-22T17:40:00Z",
+  "lastModifiedBy": "manual",
   "prompt": {
     "customInstructions": "speedDIAL 2.0 is a React SPA. Login at '/#/login' with Material-UI inputs #username and #password, then submit via button[type=submit]. After login the URL settles on '/#/' (home). Search: fill '#searchTerm' (on home or any page) and press Enter; the app routes to '/#/pna' (Price & Availability) and renders '.product-quote' cards. Authentication posts to 'https://worldpac.my.site.com/sdpro/servlet/servlet.loginwidgetcontroller?type=login' behind the scenes; the adapter lets the SPA drive that.",
     "selectorHints": {
@@ -26,7 +26,7 @@
       "priceRow": ".product-quote .name-value-row",
       "availabilityLabel": ".product-quote .item-availability"
     },
-    "knownIssues": "Pre-filled username on first load (browser autofill). Always overwrite via native setter + input/change events so React state updates. Login failures surface as a div containing 'Failed to sign in' — no role=alert. Session cookie is set on worldpac.com domain via Cloudflare. Product-detail route ('#/product-detail') is driven by React state — clicking '.product-detail-link' navigates but does NOT put the product id in the URL, so there is no shareable per-product link; sourceUrl on every PartResult stays '/#/pna' and the internal productCode is exposed via raw.productCode / raw.productDetailsApi.",
+    "knownIssues": "Pre-filled username on first load (browser autofill). Always overwrite via native setter + input/change events so React state updates. Login failures surface as a div containing 'Failed to sign in' — no role=alert. Session cookie is set on worldpac.com domain via Cloudflare. Product-detail route ('#/product-detail') is driven by React state — clicking '.product-detail-link' navigates but does NOT put the product id in the URL, so there is no shareable per-product link; sourceUrl on every PartResult stays '/#/pna' and the internal productCode is exposed via raw.productCode / raw.productDetailsApi. Search completion signal: key off the POST '/v3/pna360' XHR (not off the DOM); stale '.product-quote' rows from a prior search rehydrate from localStorage before the new fetch lands, so any DOM-based wait races the rehydration — the XHR is the authoritative edge. Before dispatching a new search, hash-navigate to '/#/' (NOT a full page.reload — that cost ~20 s through the SOCKS proxy in benchmarks and is not required once the XHR-based completion signal is in place). Locale trap: the SPA fetches '/i18n/public/<navigator.language>.json' on boot and '/i18n/public/ru.json' returns HTTP 500, which replaces the login form with a feature-test error; Playwright contexts must set `locale: 'en-US'` (and Accept-Language) to avoid this. For lazy-loaded product photos: scrollIntoView triggers the IntersectionObserver swap that sets the HTML src attribute to the real URL — we consume `getAttribute('src')`, NOT `currentSrc`, because currentSrc only populates after the image actually finishes fetching over the network and we only need the URL, not the bytes.",
     "apiNotes": "Internal REST (authenticated via the session cookie, not public): POST '/sdpro/servlet/servlet.loginwidgetcontroller?type=login' (login, host worldpac.my.site.com), POST '/v3/pna360' (search), GET '/v3/productdetails?productCode=<partNumber padded to 18 with spaces><brandCode>' (e.g. 'H11.BX            OSR'), GET '/v3/buyersguide/?productCode=...&searchOptions=AM,OE', POST '/v3/digitalassets' (images). Brand code is parsed from the logo URL path: 'img.wp-static.com/brands/<CODE>.gif'. WCAP API is the public path but needs an API token issued from Settings → API Tokens (not used here)."
   }
 }

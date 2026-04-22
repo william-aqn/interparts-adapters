@@ -30,18 +30,23 @@ describe('worldpac-speeddial adapter', () => {
   });
 
   it('search() signals AuthRequiredError when the SPA lands on /#/login', async () => {
-    // Fake page stub — the adapter first checks for #searchTerm, goes to
-    // HOME if absent, waits for the selector, then checks the login hash.
-    // We short-circuit by claiming the selector is already present and then
-    // returning `true` for the login-hash probe.
+    // Fake page stub — the adapter: checks for #searchTerm (present), hash-
+    // navigates to '/#/', waits for the hash to settle, waits for the
+    // #searchTerm selector, then checks the login hash. We short-circuit
+    // by returning `true` for both the selector-present probe and the
+    // login-hash probe.
     const ctx = createTestContext();
     const fakePage = {
       async goto() { return undefined; },
       async waitForSelector() { return undefined; },
+      async waitForFunction() { return undefined; },
       async evaluate<R>(fn: (arg?: unknown) => R): Promise<R> {
         const src = fn.toString();
         if (src.includes("document.querySelector('#searchTerm')")) {
           return true as unknown as R;
+        }
+        if (src.includes("location.hash = '#/'")) {
+          return undefined as unknown as R;
         }
         if (src.includes("location.hash.startsWith('#/login')")) {
           return true as unknown as R;

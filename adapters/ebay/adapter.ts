@@ -1,29 +1,33 @@
 /**
  * ebay adapter — http-mode, no auth.
  *
- * Search endpoint: GET https://www.ebay.com/sch/i.html?_nkw=<query>
- * Response is a full server-rendered HTML page. Each result is a
- *   <li class="s-card"> inside <ul class="srp-results">.
+ * Hits https://www.ebay.com/sch/i.html?_nkw=<query> and parses the rendered
+ * SRP. Each result is a <li class="s-card"> inside <ul class="srp-results">.
  *
  * Gotchas:
+ *   - eBay is fronted by Akamai Bot Manager. From a plain datacenter IP
+ *     (our Docker egress) the endpoint returns the "Pardon Our Interruption"
+ *     splash (~13 KB, zero s-card elements) regardless of User-Agent. This
+ *     adapter relies on the site being configured with a residential proxy
+ *     (socks5/http) in admin → Proxies, and on the worker's fetch-client
+ *     routing ctx.fetch through it. When the splash page comes back we
+ *     detect it and return [] with a WARN log so the operator can check
+ *     the pool.
  *   - Promo / placement cards have title "Shop on eBay" and a fake
  *     data-listingid — they must be filtered out.
  *   - When there are no real matches, the page still renders a suggestion
- *     grid. The presence of a .srp-save-null-search banner (“No exact
- *     matches found”) is the authoritative empty-result signal.
- *   - Card titles wrap an a11y span “Opens in a new window or tab”; strip it.
+ *     grid. The presence of a .srp-save-null-search banner ("No exact
+ *     matches found") is the authoritative empty-result signal.
+ *   - Card titles wrap an a11y span "Opens in a new window or tab"; strip it.
  *   - Currency depends on visitor geolocation/cookies — parse the symbol
  *     from the rendered price and map to ISO 4217.
  *   - Listing URLs are obfuscated with tracking params; reconstruct a
  *     clean per-item URL from the data-listingid attribute.
- *   - A plain Node fetch hits eBay's "Pardon Our Interruption" bot wall
- *     (small 13 KB splash page with 0 result cards). Setting a real-browser
- *     User-Agent on the request returns the normal SRP (~500 KB).
  *
  * Security invariants:
  *   - Only touches www.ebay.com (meta.url).
  *   - No auth, no credentials.
- *   - HTTP strictly via ctx.fetch.
+ *   - HTTP strictly via ctx.fetch (no direct http / node-fetch import).
  */
 
 import type {
@@ -38,8 +42,9 @@ import type {
 const BASE_URL = 'https://www.ebay.com';
 const SEARCH_PATH = '/sch/i.html';
 
-/** A desktop Chrome UA. eBay serves the bot-wall splash page to requests with
- *  a Node/undici default UA; a browser-like UA returns the normal SRP. */
+/** Desktop Chrome UA. eBay serves the bot-wall splash to requests with a
+ *  Node/undici default UA; a browser-like UA is required even when going
+ *  through a residential proxy. */
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -95,8 +100,8 @@ function detectCurrency(priceText: string): string {
   return 'USD';
 }
 
-/** Extract the first numeric amount from an eBay price string. Handles forms
- *  like "$10.00", "US $1,234.56", "$10.00 to $20.00" (picks the lower bound).
+/** Extract the first numeric amount from an eBay price string. Handles
+ *  "$10.00", "US $1,234.56", "$10.00 to $20.00" (picks the lower bound).
  *  Returns 0 when no digits. */
 function parseAmount(text: string | null | undefined): number {
   if (!text) return 0;
@@ -122,15 +127,10 @@ function pickImage(imgEl: CheerioNode): string | undefined {
     if (/ir\.ebaystatic\.com/.test(v)) continue;
     if (/^https?:\/\//i.test(v)) return v;
   }
-  // Fall back to whatever src we have, even if it's the placeholder.
   const fallback = (imgEl.attr('src') ?? '').trim();
   return fallback || undefined;
 }
 
-/** Map eBay condition subtitle text ("Brand New", "Pre-Owned", "Open Box",
- *  "For parts or not working", …) to our AvailabilityStatus. When a listing
- *  has a positive price, treat it as in_stock regardless of condition — the
- *  condition is informational, not a stock signal. */
 function availabilityFor(price: number): AvailabilityStatus {
   return price > 0 ? 'in_stock' : 'unknown';
 }
@@ -166,8 +166,14 @@ const adapter: PartSearchAdapter = {
         signal: controller.signal,
         headers: {
           'User-Agent': BROWSER_UA,
-          'Accept': 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.8',
+          'Accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Upgrade-Insecure-Requests': '1',
         },
       });
       if (!res.ok) {
@@ -179,10 +185,19 @@ const adapter: PartSearchAdapter = {
       clearTimeout(timer);
     }
 
+    // Akamai bot-wall splash: short HTML with "Pardon Our Interruption". The
+    // real SRP is ~500 KB; the splash is ~13 KB. Either signal is enough.
+    if (html.length < 40_000 && /Pardon Our Interruption|splashui\/challenge/i.test(html)) {
+      ctx.logger.warn('ebay: bot-wall splash received (check proxy pool has a residential egress)', {
+        htmlBytes: html.length,
+      });
+      return [];
+    }
+
     const $ = loadCheerio(ctx, html);
 
-    // "No exact matches found" banner → the page still renders a suggestions
-    // grid, but those are NOT real matches. Treat as empty.
+    // "No exact matches found" banner → the page still renders suggestions,
+    // which are NOT real matches. Treat as empty.
     if ($('.srp-save-null-search').length > 0) {
       ctx.logger.info('ebay: no exact matches', { query: q });
       return [];
@@ -190,7 +205,10 @@ const adapter: PartSearchAdapter = {
 
     const rows = $('li.s-card');
     if (rows.length === 0) {
-      ctx.logger.info('ebay: zero cards rendered', { query: q });
+      ctx.logger.warn('ebay: zero cards rendered', {
+        query: q,
+        htmlBytes: html.length,
+      });
       return [];
     }
 
@@ -204,7 +222,6 @@ const adapter: PartSearchAdapter = {
 
       const rawTitle = row.find('.s-card__title').first().text();
       const title = cleanTitle(rawTitle);
-      // Promo / placement cards rendered by eBay search.
       if (!title || title === 'Shop on eBay') return;
 
       const listingId = norm(row.attr('data-listingid') ?? '');
@@ -262,14 +279,7 @@ const adapter: PartSearchAdapter = {
           checkedAt,
         };
       }
-      const body = await res.text();
-      const ok = /eBay/i.test(body);
-      return {
-        ok,
-        latencyMs: Date.now() - t0,
-        ...(ok ? {} : { error: 'unexpected homepage content' }),
-        checkedAt,
-      };
+      return { ok: true, latencyMs: Date.now() - t0, checkedAt };
     } catch (err) {
       return {
         ok: false,

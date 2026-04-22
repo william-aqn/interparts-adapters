@@ -1,0 +1,31 @@
+{
+  "adapterId": "ebay-api",
+  "name": "eBay (Browse API)",
+  "url": "https://api.ebay.com",
+  "mode": "api",
+  "needsAuth": true,
+  "maxRPS": 2,
+  "timeout": 20000,
+  "retries": 2,
+  "tags": ["us", "marketplace", "retail", "api", "oauth"],
+  "version": 1,
+  "lastModified": "2026-04-22T10:25:00Z",
+  "lastModifiedBy": "manual",
+  "healthCheckQuery": "blbh11",
+  "prompt": {
+    "customInstructions": "Adapter against the official eBay Browse API. Auth: OAuth 2.0 client_credentials. The worker configures ctx.credentials from admin → Sites → eBay API → Credentials: `login` = OAuth App ID (Client ID), `password` = OAuth Cert ID (Client Secret), `apiKey` (optional) = pre-issued Bearer token that short-circuits the token exchange. Search endpoint: GET https://api.ebay.com/buy/browse/v1/item_summary/search?q=<query>&limit=<N> with Authorization: Bearer <token> and X-EBAY-C-MARKETPLACE-ID: EBAY_US. Token cached in-module for ~2h (expires_in from the OAuth response) and refreshed 60 s before expiry. On 401/403 from /item_summary/search the adapter evicts the cache entry and throws AuthRequiredError so the runtime retries with a fresh token.",
+    "selectorHints": {
+      "itemSummariesPath": "itemSummaries[]",
+      "listingIdField": "legacyItemId ?? itemId",
+      "titleField": "title",
+      "priceField": "marketingPrice.discountedPrice ?? price",
+      "imageField": "image.imageUrl ?? thumbnailImages[0].imageUrl",
+      "productUrlField": "itemWebUrl",
+      "conditionField": "condition",
+      "sellerField": "seller.username",
+      "countryField": "itemLocation.country"
+    },
+    "knownIssues": "Default sandbox App IDs target https://api.sandbox.ebay.com/ — we hardcode the prod host here, so sandbox keys will 401. Use production keys from developer.ebay.com → My Account → Keysets. eBay Developer defaults to 5000 calls/day per App ID; raise via the Application Growth Check request. Some listings (auctions with no Buy-It-Now price) have price.value absent; we record price=0 rather than dropping the item — the searchAnalytics dashboard can filter those out if needed. Marketplace is fixed to EBAY_US; for non-US operators fork the adapter to read the marketplace header from ctx (out of scope for the PartSearchAdapter contract).",
+    "apiNotes": "Full endpoint reference: https://developer.ebay.com/api-docs/buy/browse/resources/item_summary/methods/search. OAuth: https://developer.ebay.com/api-docs/static/oauth-client-credentials-grant.html. Scope used: https://api.ebay.com/oauth/api_scope (no user consent needed). Response schema: ItemSummary (see code for the subset we map). `total` echoes total matches so the admin UI can show pagination context even when we only pull the first page."
+  }
+}
